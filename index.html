@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ultimate HUD - Tactical Navigator</title>
+    <style>
+        :root {
+            --primary: #00ff00;
+            --warning: #ffff00;
+            --danger: #ff0000;
+            --target: #00ffff;
+        }
+        body {
+            background: #000; color: var(--primary);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; transform: scaleX(-1); /* กลับด้านสะท้อนกระจก */
+        }
+        
+        /* ช่องใส่พิกัด */
+        #ui-layer {
+            position: absolute; top: 10px; left: 10px; z-index: 100;
+            transform: scaleX(-1); background: rgba(0,255,0,0.1); 
+            padding: 10px; border-radius: 5px; border: 1px solid rgba(0,255,0,0.2);
+        }
+        input { background: #000; color: var(--primary); border: 1px solid var(--primary); margin: 2px; padding: 5px; width: 100px; border-radius: 3px; }
+        button { background: var(--primary); color: #000; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-weight: bold; }
+
+        .hud-container { position: relative; width: 360px; height: 360px; display: flex; justify-content: center; align-items: center; }
+        
+        /* เข็มทิศ */
+        #compass-ring {
+            position: absolute; width: 100%; height: 100%;
+            border: 2px solid rgba(0, 255, 0, 0.05); border-radius: 50%;
+            will-change: transform;
+        }
+        .dir { position: absolute; width: 100%; height: 100%; text-align: center; font-size: 24px; font-weight: 900; padding-top: 10px; }
+
+        /* ลูกศรชี้เป้าหมายสีฟ้า */
+        #target-pointer {
+            position: absolute; width: 100%; height: 100%;
+            display: none; 
+        }
+        #target-pointer::after {
+            content: '▼'; position: absolute; top: 40px; left: 50%;
+            transform: translateX(-50%); color: var(--target); font-size: 20px;
+            filter: drop-shadow(0 0 5px var(--target));
+        }
+
+        /* มาตรวัดความเร็ว */
+        .speed-svg { position: absolute; transform: rotate(-90deg); width: 300px; height: 300px; }
+        .speed-bg { fill: none; stroke: #111; stroke-width: 12; }
+        .speed-bar { 
+            fill: none; stroke: var(--primary); stroke-width: 15; 
+            stroke-linecap: round; stroke-dasharray: 816; stroke-dashoffset: 816; 
+            transition: stroke 0.3s;
+        }
+
+        #speed-info { position: absolute; text-align: center; z-index: 10; }
+        #speed { font-size: 110px; font-weight: 900; margin: 0; line-height: 0.8; }
+        #dist-to-target { font-size: 22px; color: var(--target); margin-top: 10px; font-weight: bold; min-height: 26px; }
+        #unit { font-size: 14px; color: #555; margin: 5px 0 0; font-weight: bold; }
+        
+        @keyframes danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .is-danger { animation: danger 0.4s infinite; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <input type="text" id="target-lat" placeholder="Latitude">
+        <input type="text" id="target-lng" placeholder="Longitude">
+        <button onclick="setTarget()">SET</button>
+        <button onclick="clearTarget()" style="background:#333; color:#fff; margin-left:5px;">X</button>
+    </div>
+
+    <div class="hud-container" id="main-hud">
+        <div id="compass-ring">
+            <div class="dir" style="transform: rotate(0deg)">N</div>
+            <div class="dir" style="transform: rotate(90deg)">E</div>
+            <div class="dir" style="transform: rotate(180deg)">S</div>
+            <div class="dir" style="transform: rotate(270deg)">W</div>
+            <div id="target-pointer"></div>
+        </div>
+
+        <svg class="speed-svg">
+            <circle class="speed-bg" cx="150" cy="150" r="130"></circle>
+            <circle id="progress" class="speed-bar" cx="150" cy="150" r="130"></circle>
+        </svg>
+
+        <div id="speed-info">
+            <p id="speed">0</p>
+            <div id="dist-to-target"></div>
+            <p id="unit">KM/H</p>
+        </div>
+    </div>
+
+    <script>
+        const MAX_SPEED = 180;
+        const CIRCUMFERENCE = 2 * Math.PI * 130;
+        
+        let currentSpeed = 0, targetSpeed = 0;
+        let currentHeading = 0, targetHeading = 0;
+        let userPos = null, targetPos = null;
+
+        const speedEl = document.getElementById('speed');
+        const progressEl = document.getElementById('progress');
+        const compassEl = document.getElementById('compass-ring');
+        const hudEl = document.getElementById('main-hud');
+        const distEl = document.getElementById('dist-to-target');
+        const pointerEl = document.getElementById('target-pointer');
+
+        function setTarget() {
+            const lat = parseFloat(document.getElementById('target-lat').value);
+            const lng = parseFloat(document.getElementById('target-lng').value);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                targetPos = { lat, lng };
+                pointerEl.style.display = 'block';
+                document.getElementById('ui-layer').style.opacity = '0.3';
+            }
+        }
+
+        function clearTarget() {
+            targetPos = null;
+            pointerEl.style.display = 'none';
+            distEl.innerText = "";
+            document.getElementById('ui-layer').style.opacity = '1';
+        }
+
+        function getDistance(p1, p2) {
+            const R = 6371;
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLon = (p2.lng - p1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function getBearing(p1, p2) {
+            const y = Math.sin((p2.lng - p1.lng) * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180);
+            const x = Math.cos(p1.lat * Math.PI / 180) * Math.sin(p2.lat * Math.PI / 180) -
+                      Math.sin(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.cos((p2.lng - p1.lng) * Math.PI / 180);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        navigator.geolocation.watchPosition(pos => {
+            userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            targetSpeed = (pos.coords.speed && pos.coords.speed > 0.5) ? Math.round(pos.coords.speed * 3.6) : 0;
+            if (pos.coords.heading) targetHeading = (180 - pos.coords.heading + 360) % 360;
+        }, null, { enableHighAccuracy: true });
+
+        window.addEventListener('deviceorientationabsolute', e => {
+            let h = e.webkitCompassHeading || (360 - e.alpha);
+            targetHeading = (180 - h + 360) % 360;
+        });
+
+        function animate() {
+            // Smooth Values
+            currentSpeed += (targetSpeed - currentSpeed) * 0.15;
+            let diff = targetHeading - currentHeading;
+            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+            currentHeading += diff * 0.1;
+
+            // Update UI
+            speedEl.innerText = Math.round(currentSpeed);
+            compassEl.style.transform = `rotate(${currentHeading}deg)`;
+            
+            const offset = CIRCUMFERENCE - (Math.min(currentSpeed, MAX_SPEED) / MAX_SPEED) * CIRCUMFERENCE;
+            progressEl.style.strokeDashoffset = offset;
+
+            if (userPos && targetPos) {
+                const dist = getDistance(userPos, targetPos);
+                const bearing = getBearing(userPos, targetPos);
+                distEl.innerText = dist < 1 ? `${Math.round(dist * 1000)} M` : `${dist.toFixed(1)} KM`;
+                pointerEl.style.transform = `rotate(${bearing}deg)`;
+            }
+
+            // Color Logic
+            if (currentSpeed > 90) { 
+                progressEl.style.stroke = 'var(--danger)'; 
+                speedEl.style.color = 'var(--danger)';
+                hudEl.classList.add('is-danger'); 
+            }
+            else if (currentSpeed > 60) { 
+                progressEl.style.stroke = 'var(--warning)'; 
+                speedEl.style.color = 'var(--warning)';
+                hudEl.classList.remove('is-danger'); 
+            }
+            else { 
+                progressEl.style.stroke = 'var(--primary)'; 
+                speedEl.style.color = 'var(--primary)';
+                hudEl.classList.remove('is-danger'); 
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        if ('wakeLock' in navigator) { navigator.wakeLock.request('screen').catch(()=>{}); }
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
