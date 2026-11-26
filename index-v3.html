@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Open P2P & IoT Hub</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1115; color: #f1f3f5; padding: 15px; max-width: 800px; margin: auto; line-height: 1.5; }
+        .card { background: #181b20; padding: 20px; border-radius: 14px; margin-bottom: 16px; border: 1px solid #2b303b; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; font-size: 20px; color: #fff; display: flex; align-items: center; gap: 8px; }
+        .guide { background: #21252d; padding: 12px 15px; border-radius: 10px; font-size: 13.5px; color: #adb5bd; margin-bottom: 15px; border-left: 3px solid #339af0; }
+        .row { display: flex; gap: 8px; margin-top: 8px; }
+        input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #343a40; background: #212529; color: #fff; font-size: 15px; outline: none; }
+        input[type="text"]:focus { border-color: #339af0; }
+        button { padding: 12px 16px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; color: #fff; transition: 0.2s; }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { background: #343a40 !important; color: #868e96; cursor: not-allowed; }
+        .btn-primary { background: #228be6; }
+        .btn-secondary { background: #495057; }
+        .btn-green { background: #12b886; }
+        .btn-purple { background: #7950f2; }
+        .btn-orange { background: #fd7e14; }
+        .btn-red { background: #fa5252; }
+        .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+        #chatBox { height: 240px; overflow-y: auto; background: #121417; padding: 12px; border-radius: 10px; border: 1px solid #2b303b; margin-top: 12px; }
+        .msg { margin-bottom: 8px; padding: 8px 12px; border-radius: 8px; background: #1e2229; word-wrap: break-word; font-size: 14px; }
+        .sys { color: #868e96; font-size: 13px; }
+        .p2p { border-left: 4px solid #20c997; }
+        .mqtt { border-left: 4px solid #fd7e14; }
+        #videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+        .media-box { position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid #343a40; }
+        .media-box video, .media-box img { width: 100%; display: block; max-height: 300px; object-fit: contain; }
+        .media-label { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 5px; font-size: 12px; }
+        a.dl-link { color: #20c997; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 4px; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; background: #2b303b; color: #adb5bd; }
+        .badge.online { background: rgba(32, 201, 151, 0.15); color: #20c997; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>🌐 ช่องสัญญาณสื่อสารอิสระ (P2P & IoT) <span id="connBadge" class="badge">ออฟไลน์</span></h2>
+        <div class="guide">
+            <b>ใช้งานได้ทุกคน ฟรี ไม่จำกัด:</b> ตั้งชื่อช่องทางส่วนตัวของคุณเอง หรือกดสุ่มชื่อห้องใหม่ แล้วส่งลิงก์ให้เพื่อน มือถือ ทีวี หรือบอร์ด IoT เข้ามาเชื่อมต่อตรงหากันได้ทันทีโดยไม่ผ่านเซิร์ฟเวอร์เก็บข้อมูล
+        </div>
+
+        <div class="row">
+            <input type="text" id="channelInput" placeholder="ตั้งชื่อช่องทางของคุณ...">
+            <button id="randBtn" class="btn-secondary" onclick="generateRandomRoom()" title="สุ่มชื่อห้องใหม่">🎲 สุ่มชื่อ</button>
+        </div>
+
+        <div class="row">
+            <button id="joinBtn" class="btn-primary" style="flex: 2;" onclick="joinChannel()">🚀 เข้าสู่ช่องสัญญาณ</button>
+            <button id="shareBtn" class="btn-green" style="flex: 1;" onclick="copyRoomLink()">🔗 คัดลอกลิงก์ห้อง</button>
+        </div>
+        <p id="status" class="sys" style="margin: 10px 0 0 0;">พร้อมเชื่อมต่อ (รองรับระบบสลับเซิร์ฟเวอร์สำรองอัตโนมัติ)</p>
+    </div>
+
+    <div class="card" id="commPanel" style="display:none;">
+        <!-- พื้นที่แสดงวิดีโอ กล้อง แชร์หน้าจอ และภาพจากกล้อง IoT -->
+        <div id="videoGrid">
+            <div class="media-box" id="iotCamBox" style="display:none;">
+                <img id="iotCamImg" alt="ESP32-CAM Stream">
+                <div class="media-label">📷 กล้อง IoT (ESP32-CAM)</div>
+            </div>
+        </div>
+
+        <!-- ปุ่มควบคุมสื่อ -->
+        <div class="btn-grid">
+            <button class="btn-green" id="camBtn" onclick="toggleMedia('camera')">📷 เปิดกล้อง/ไมค์</button>
+            <button class="btn-purple" id="scrBtn" onclick="toggleMedia('screen')">🖥️ แชร์หน้าจอ</button>
+            <button class="btn-secondary" onclick="sendIoTCmd('SNAP')">📸 ขอภาพ IoT</button>
+            <button class="btn-secondary" onclick="sendIoTCmd('STREAM_ON')">▶️ ภาพสด IoT</button>
+            <button class="btn-secondary" onclick="sendIoTCmd('STREAM_OFF')">⏹️ หยุดภาพ IoT</button>
+        </div>
+
+        <!-- ส่วนส่งไฟล์ขนาดใหญ่ P2P -->
+        <div style="margin-top: 12px; background: #21252d; padding: 12px; border-radius: 10px; border: 1px solid #2b303b;">
+            <div style="font-size: 13.5px; color: #ced4da; margin-bottom: 6px;">📁 <b>ส่งไฟล์ตรงระหว่างเครื่อง (P2P ไม่จำกัดขนาด):</b></div>
+            <div class="row" style="margin-top:0;">
+                <input type="file" id="fileInput" style="color: #adb5bd; font-size: 14px; padding: 6px 0;">
+                <button class="btn-orange" onclick="sendLargeFile()">ส่งไฟล์</button>
+            </div>
+            <div id="fileProgress" class="sys" style="margin-top:5px;"></div>
+        </div>
+
+        <!-- กล่องข้อความ -->
+        <div id="chatBox"></div>
+        <div class="row">
+            <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ หรือคำสั่งส่งไปในห้อง (เช่น ON, OFF)..." onkeypress="if(event.key==='Enter') sendText()">
+            <button class="btn-primary" onclick="sendText()">ส่ง</button>
+        </div>
+    </div>
+
+    <script>
+        // รายชื่อ Public MQTT Brokers สำรองเพื่อความเสถียรสูงสุด
+        const BROKERS = [
+            { name: 'EMQX Global', url: 'wss://broker.emqx.io:8084/mqtt' },
+            { name: 'HiveMQ Public', url: 'wss://broker.hivemq.com:8884/mqtt' }
+        ];
+
+        let brokerIndex = 0;
+        let mqttClient, peer, localStream;
+        let activeMediaMode = null;
+        let connections = {};
+        let incomingFiles = {};
+        let myPeerId = 'node-' + Math.random().toString(36).substr(2, 7);
+        let currentTopic = '';
+
+        // ตรวจสอบพารามิเตอร์ ?room= จาก URL ทันทีที่เปิดหน้าเว็บ
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const roomParam = params.get('room');
+            if (roomParam) {
+                document.getElementById('channelInput').value = roomParam;
+                joinChannel(); // เข้าห้องให้อัตโนมัติถ้าเปิดผ่าน Magic Link
+            } else {
+                generateRandomRoom();
+            }
+        };
+
+        function generateRandomRoom() {
+            const randStr = 'ch-' + Math.random().toString(36).substring(2, 8);
+            document.getElementById('channelInput').value = randStr;
+        }
+
+        function copyRoomLink() {
+            const room = document.getElementById('channelInput').value.trim();
+            if (!room) return alert('กรุณาระบุชื่อช่องทางก่อนครับ');
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', room);
+            navigator.clipboard.writeText(url.toString()).then(() => {
+                alert('คัดลอกลิงก์เข้าห้อง [' + room + '] เรียบร้อย! ส่งให้เพื่อนหรือเปิดบนเครื่องอื่นได้เลยครับ');
+            });
+        }
+
+        function log(html, type = 'sys') {
+            const box = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.innerHTML = html;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function joinChannel() {
+            const channel = document.getElementById('channelInput').value.trim();
+            if (!channel) return alert('กรุณาใส่ชื่อช่องสัญญาณ');
+
+            document.getElementById('joinBtn').disabled = true;
+            document.getElementById('randBtn').disabled = true;
+            document.getElementById('channelInput').disabled = true;
+            document.getElementById('commPanel').style.display = 'block';
+            currentTopic = 'universal-p2p-app/' + channel;
+
+            // อัปเดต URL บนเบราว์เซอร์โดยไม่รีเฟรชหน้า
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', channel);
+            window.history.replaceState({}, '', url);
+
+            // ตั้งค่า WebRTC พร้อม Multi-STUN Servers เพื่อทะลุเครือข่ายมือถือ 4G/5G
+            peer = new Peer(myPeerId, {
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                log(`รหัสอุปกรณ์ของคุณ: <b>${id}</b>`);
+                connectMQTTWithFailover();
+            });
+
+            peer.on('connection', (conn) => setupDataConn(conn));
+
+            peer.on('call', (call) => {
+                call.answer(localStream || null);
+                call.on('stream', (remoteStream) => addVideoStream(call.peer, remoteStream, 'เพื่อนร่วมห้อง'));
+            });
+
+            peer.on('disconnected', () => {
+                log('⚠️ สัญญาณ P2P ขาดช่วง กำลังเชื่อมต่อใหม่อัตโนมัติ...');
+                peer.reconnect();
+            });
+        }
+
+        function connectMQTTWithFailover() {
+            const broker = BROKERS[brokerIndex];
+            document.getElementById('status').innerText = `กำลังเชื่อมต่อไปยัง ${broker.name}...`;
+
+            mqttClient = mqtt.connect(broker.url, {
+                connectTimeout: 4000,
+                reconnectPeriod: 3000
+            });
+
+            let connectedFlag = false;
+
+            // ระบบสลับเซิร์ฟเวอร์สำรองอัตโนมัติหากตัวหลักไม่ตอบสนองใน 4.5 วินาที
+            const failoverTimer = setTimeout(() => {
+                if (!connectedFlag) {
+                    mqttClient.end(true);
+                    brokerIndex = (brokerIndex + 1) % BROKERS.length;
+                    log(`⚠️ ${broker.name} ตอบสนองช้า กำลังสลับไปใช้เซิร์ฟเวอร์สำรอง...`);
+                    connectMQTTWithFailover();
+                }
+            }, 4500);
+
+            mqttClient.on('connect', () => {
+                connectedFlag = true;
+                clearTimeout(failoverTimer);
+                const badge = document.getElementById('connBadge');
+                badge.innerText = 'ออนไลน์';
+                badge.classList.add('online');
+                document.getElementById('status').innerText = `เชื่อมต่อสำเร็จผ่าน ${broker.name} | ห้อง: ${document.getElementById('channelInput').value}`;
+
+                mqttClient.subscribe(currentTopic);
+                mqttClient.publish(currentTopic, JSON.stringify({ type: 'HELLO', peerId: myPeerId }));
+                log(`✅ เข้าสู่ห้อง <b>${document.getElementById('channelInput').value}</b> เรียบร้อย!`);
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    if (data.type === 'HELLO' && data.peerId !== myPeerId) {
+                        if (!connections[data.peerId]) {
+                            const conn = peer.connect(data.peerId, { reliable: true });
+                            setupDataConn(conn);
+                            // ตอบกลับให้เพื่อนรู้ตัวด้วย
+                            mqttClient.publish(currentTopic, JSON.stringify({ type: 'HELLO', peerId: myPeerId }));
+                        }
+                        if (localStream) {
+                            peer.call(data.peerId, localStream);
+                        }
+                    } else if (data.type === 'IOT_DATA') {
+                        log(`🤖 <b>[IoT]:</b> ${data.payload}`, 'mqtt');
+                    } else if (data.type === 'IOT_CAM') {
+                        document.getElementById('iotCamBox').style.display = 'block';
+                        document.getElementById('iotCamImg').src = 'data:image/jpeg;base64,' + data.image;
+                    }
+                } catch (e) {
+                    log(`🤖 <b>[IoT Raw]:</b> ${message.toString()}`, 'mqtt');
+                }
+            });
+        }
+
+        function setupDataConn(conn) {
+            conn.on('open', () => {
+                connections[conn.peer] = conn;
+                log(`🔗 เชื่อมต่อตรง P2P กับ <b>${conn.peer}</b> สำเร็จ`);
+                if (localStream) {
+                    peer.call(conn.peer, localStream);
+                }
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'CHAT') {
+                    log(`💬 <b>[${conn.peer}]:</b> ${data.text}`, 'p2p');
+                } else if (data.type === 'FILE_META') {
+                    incomingFiles[data.fileId] = { name: data.name, size: data.size, chunks: [], received: 0 };
+                    log(`📥 กำลังรับไฟล์: <b>${data.name}</b> (${(data.size / 1048576).toFixed(2)} MB)...`, 'p2p');
+                } else if (data.type === 'FILE_CHUNK') {
+                    const file = incomingFiles[data.fileId];
+                    if (!file) return;
+                    file.chunks.push(data.chunk);
+                    file.received += data.chunk.byteLength;
+                    if (file.received >= file.size) {
+                        const blob = new Blob(file.chunks);
+                        const url = URL.createObjectURL(blob);
+                        log(`✅ รับไฟล์เสร็จสิ้น: <a class="dl-link" href="${url}" download="${file.name}">คลิกดาวน์โหลด ${file.name}</a>`, 'p2p');
+                        delete incomingFiles[data.fileId];
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                delete connections[conn.peer];
+                const box = document.getElementById('box-' + conn.peer);
+                if (box) box.remove();
+                log(`❌ <b>${conn.peer}</b> ออกจากห้องแล้ว`);
+            });
+        }
+
+        function sendText() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            for (let id in connections) {
+                connections[id].send({ type: 'CHAT', text: text });
+            }
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(currentTopic, JSON.stringify({ type: 'CMD', payload: text }));
+            }
+            log(`📤 <b>[ฉัน]:</b> ${text}`, 'p2p');
+            input.value = '';
+        }
+
+        function sendIoTCmd(cmd) {
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(currentTopic, JSON.stringify({ type: 'CMD', payload: cmd }));
+                log(`📡 ส่งคำสั่งควบคุม IoT: <b>${cmd}</b>`, 'mqtt');
+            }
+        }
+
+        async function sendLargeFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return alert('กรุณาเลือกไฟล์ก่อนครับ');
+            if (Object.keys(connections).length === 0) return alert('ยังไม่มีเพื่อน P2P อยู่ในห้องครับ');
+
+            const fileId = Math.random().toString(36).substr(2, 9);
+            const chunkSize = 65536;
+            let offset = 0;
+
+            for (let id in connections) {
+                connections[id].send({ type: 'FILE_META', fileId, name: file.name, size: file.size });
+            }
+
+            const progressEl = document.getElementById('fileProgress');
+            while (offset < file.size) {
+                const slice = file.slice(offset, offset + chunkSize);
+                const buffer = await slice.arrayBuffer();
+                for (let id in connections) {
+                    connections[id].send({ type: 'FILE_CHUNK', fileId, chunk: buffer });
+                }
+                offset += buffer.byteLength;
+                const percent = Math.min(100, Math.round((offset / file.size) * 100));
+                progressEl.innerText = `กำลังส่งไฟล์ ${file.name}: ${percent}%`;
+                await new Promise(r => setTimeout(r, 5));
+            }
+            log(`📤 ส่งไฟล์ <b>${file.name}</b> สำเร็จ!`, 'p2p');
+            progressEl.innerText = '';
+            fileInput.value = '';
+        }
+
+        async function toggleMedia(mode) {
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+                const myBox = document.getElementById('box-me');
+                if (myBox) myBox.remove();
+                document.getElementById('camBtn').innerText = '📷 เปิดกล้อง/ไมค์';
+                document.getElementById('scrBtn').innerText = '🖥️ แชร์หน้าจอ';
+                if (activeMediaMode === mode) {
+                    activeMediaMode = null;
+                    return;
+                }
+            }
+
+            try {
+                if (mode === 'camera') {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    document.getElementById('camBtn').innerText = '⏹️ ปิดกล้อง/ไมค์';
+                } else {
+                    localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                    document.getElementById('scrBtn').innerText = '⏹️ หยุดแชร์หน้าจอ';
+                }
+                activeMediaMode = mode;
+                addVideoStream('me', localStream, 'หน้าจอของคุณ', true);
+
+                for (let id in connections) {
+                    const call = peer.call(id, localStream);
+                    call.on('stream', (remoteStream) => addVideoStream(id, remoteStream, 'เพื่อนร่วมห้อง'));
+                }
+            } catch (err) {
+                alert('ไม่สามารถเปิดกล้องหรือแชร์หน้าจอได้: ' + err.message);
+            }
+        }
+
+        function addVideoStream(id, stream, labelText, isMuted = false) {
+            let box = document.getElementById('box-' + id);
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'box-' + id;
+                box.className = 'media-box';
+
+                const video = document.createElement('video');
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = isMuted;
+                video.srcObject = stream;
+
+                const label = document.createElement('div');
+                label.className = 'media-label';
+                label.innerText = labelText;
+
+                box.appendChild(video);
+                box.appendChild(label);
+                document.getElementById('videoGrid').appendChild(box);
+            } else {
+                box.querySelector('video').srcObject = stream;
+            }
+        }
+    </script>
+</body>
+</html>

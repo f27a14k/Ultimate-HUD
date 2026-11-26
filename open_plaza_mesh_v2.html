@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenPlaza Mesh v2 - จัตุรัสกลางไร้ตัวกลางระดับโปรดักชัน</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0d1117; color: #c9d1d9; padding: 15px; max-width: 850px; margin: auto; }
+        .card { background: #161b22; padding: 18px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #30363d; }
+        h2, h3 { margin-top: 0; color: #f0f6fc; }
+        input, textarea, button { width: 100%; padding: 11px; margin-top: 8px; border-radius: 8px; border: 1px solid #30363d; box-sizing: border-box; font-size: 15px; }
+        input, textarea { background: #0d1117; color: #f0f6fc; }
+        button { background: #238636; color: white; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #21262d; color: #8b949e; cursor: not-allowed; }
+        .row { display: flex; gap: 8px; align-items: center; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .btn-blue { background: #1f6feb; }
+        .btn-purple { background: #8957e5; }
+        .btn-orange { background: #d29922; color: #0d1117; }
+        .btn-red { background: #da3633; }
+        .btn-gray { background: #30363d; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .badge-green { background: #1a472a; color: #3fb950; border: 1px solid #2ea043; }
+        .badge-blue { background: #132f4c; color: #58a6ff; border: 1px solid #1f6feb; }
+        .badge-warn { background: #3d2e00; color: #d29922; border: 1px solid #9e6a03; }
+        .pin-box { background: #131d2b; border: 1px dashed #388bfd; padding: 14px; border-radius: 8px; }
+        #chatBox { height: 260px; overflow-y: auto; background: #0d1117; padding: 12px; border-radius: 8px; border: 1px solid #30363d; margin-top: 10px; }
+        .msg { margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; background: #161b22; word-wrap: break-word; font-size: 14px; line-height: 1.4; }
+        .sys { color: #8b949e; font-style: italic; font-size: 13px; }
+        .p2p { border-left: 4px solid #3fb950; }
+        .sync { border-left: 4px solid #a371f7; }
+        .warn { border-left: 4px solid #da3633; color: #ff7b72; }
+        #videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
+        video { width: 100%; border-radius: 8px; background: #000; border: 1px solid #30363d; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; background: #0d1117; padding: 10px 12px; border-radius: 8px; border: 1px solid #30363d; margin-top: 8px; font-size: 14px; }
+        .file-item button { width: auto; margin: 0; padding: 6px 14px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+                <h2 style="margin-bottom:4px;">🌐 OpenPlaza Mesh v2</h2>
+                <span class="sys">จัตุรัสกลางไร้ตัวกลาง • สลับห้องส่วนตัวได้ • ป้องกันสแปม • ช่วยกันส่งไฟล์แบบ Swarm</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <span class="badge badge-green" id="zoneBadge">พื้นที่: จัตุรัสกลางสาธารณะ</span>
+                <span class="badge badge-blue" id="meshBadge">เชื่อมต่อเพื่อนบ้าน: 0 / 6 โหนด</span>
+            </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:12px;">
+            <button class="btn-purple" id="modeSwitchBtn" onclick="togglePrivateRoom()">🔒 แยกไปสร้างห้องส่วนตัว</button>
+            <button class="btn-blue" onclick="copyCurrentLink()">🔗 คัดลอกลิงก์พื้นที่นี้</button>
+        </div>
+        <p id="status" class="sys" style="margin-bottom:0; margin-top:10px;">สถานะ: กำลังเริ่มต้นระบบอัตโนมัติ...</p>
+    </div>
+
+    <!-- กระดานปักหมุดส่วนกลาง -->
+    <div class="card pin-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+            <strong style="color:#58a6ff;">📌 กระดานปักหมุดส่วนกลาง (จำใน RAM ส่งต่ออัตโนมัติ)</strong>
+            <span class="badge badge-warn" id="ramBadge">RAM พื้นที่นี้: 0.00 / 50 MB</span>
+        </div>
+        <textarea id="pinText" rows="2" placeholder="พิมพ์ประกาศ ลิงก์สำคัญ หรือข้อความปักหมุดให้ทุกคนในพื้นที่เห็น..."></textarea>
+        <button class="btn-gray" onclick="updatePinBoard()" style="padding:7px; font-size:13px;">อัปเดตกระดานปักหมุด</button>
+    </div>
+
+    <!-- คลังไฟล์แบบ Multi-Source Swarm -->
+    <div class="card">
+        <h3>⚡ คลังไฟล์ใน RAM แบบช่วยกันส่งต่อ (Swarm Seeding)</h3>
+        <p class="sys" style="margin:0 0 8px 0;">คนที่กดโหลดไฟล์เสร็จแล้ว จะกลายเป็นผู้ช่วยส่งต่อ (Seeder) ให้คนถัดไปโดยอัตโนมัติ</p>
+        <div class="row">
+            <input type="file" id="fileInput" style="padding:7px;">
+            <button class="btn-orange" onclick="shareFileToRam()" style="width:160px;">ฝากไฟล์เข้า RAM</button>
+        </div>
+        <div id="fileProgress" class="sys" style="margin-top:6px; color:#58a6ff;"></div>
+        <div id="ramFileList"></div>
+    </div>
+
+    <!-- วิดีโอและแชร์หน้าจอ -->
+    <div class="card">
+        <h3>🎥 สตรีมกล้อง / แชร์หน้าจอสด (P2P)</h3>
+        <div id="videoGrid"></div>
+        <div class="grid-2">
+            <button onclick="toggleMedia('camera')">📷 เปิด/ปิด กล้อง & ไมค์</button>
+            <button class="btn-purple" onclick="toggleMedia('screen')">🖥️ แชร์/หยุด หน้าจอ</button>
+        </div>
+    </div>
+
+    <!-- แชทและระบบป้องกันสแปม -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0;">💬 กระดานสนทนาสด (จำ 50 ข้อความ / หมดอายุ 30 นาที)</h3>
+            <span class="sys" id="shieldBadge">🛡️ ระบบกันสแปม: ทำงาน</span>
+        </div>
+        <div id="chatBox"></div>
+        <div class="row" style="margin-top:8px;">
+            <input type="text" id="msgInput" placeholder="พิมพ์ข้อความส่งถึงทุกคนในพื้นที่..." onkeypress="if(event.key==='Enter') sendText()">
+            <button class="btn-blue" onclick="sendText()" style="width:100px;">ส่ง</button>
+        </div>
+    </div>
+
+    <script>
+        // ค่าคงที่ระบบระดับโปรดักชัน
+        const MAX_NEIGHBORS = 6;                // จำกัดการต่อตรงไม่เกิน 6 โหนด เพื่อใช้ Gossip Relay
+        const MAX_RAM_BYTES = 50 * 1024 * 1024; // เพดาน RAM 50 MB
+        const MSG_TTL_MS = 30 * 60 * 1000;      // อายุข้อมูล 30 นาที
+        const MAX_HISTORY = 50;                 // ประวัติแชทสูงสุด 50 ข้อความ
+        const RATE_LIMIT_MS = 800;              // ป้องกันสแปม: ห้ามส่งถี่เกิน 0.8 วินาที/ข้อความ
+
+        let mqttClient = null, peer = null, localStream = null, activeMediaMode = null;
+        let connections = {};
+        let myPeerId = 'plaza-' + Math.random().toString(36).substr(2, 6);
+        let currentRoom = 'Global-Public-Plaza';
+        let isPrivate = false;
+        let brokerIndex = 0;
+        const brokers = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+
+        // ตัวแปรป้องกันสแปม (Rate Limiter & Blocklist)
+        let peerLastMsgTime = {};
+        let peerSpamCount = {};
+        let blockedPeers = new Set();
+        let myLastSendTime = 0;
+
+        // ความจำชั่วคราวใน RAM (Ephemeral State)
+        let roomState = {
+            pin: { text: '', updatedAt: 0 },
+            messages: [],
+            files: {} // { fileId: { name, size, buffer, time, seeders: Set() } }
+        };
+        let seenPacketIds = new Set();
+        let incomingChunks = {};
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const roomParam = params.get('room');
+            if (roomParam) {
+                currentRoom = roomParam;
+                isPrivate = true;
+                updateZoneUI();
+            }
+            initNetwork();
+            setInterval(cleanupExpiredRam, 60000);
+            setInterval(broadcastPresence, 15000); // ส่งสัญญาณหาเพื่อนบ้านเพิ่มหากโหนดยังไม่ครบ 6
+        };
+
+        function updateZoneUI() {
+            const badge = document.getElementById('zoneBadge');
+            const btn = document.getElementById('modeSwitchBtn');
+            if (isPrivate) {
+                badge.innerText = `พื้นที่: ห้องส่วนตัว [${currentRoom}]`;
+                badge.className = 'badge badge-warn';
+                btn.innerText = '🌐 กลับสู่จัตุรัสกลางสาธารณะ';
+            } else {
+                badge.innerText = 'พื้นที่: จัตุรัสกลางสาธารณะ';
+                badge.className = 'badge badge-green';
+                btn.innerText = '🔒 แยกไปสร้างห้องส่วนตัว';
+            }
+        }
+
+        function togglePrivateRoom() {
+            if (!isPrivate) {
+                const custom = prompt('ตั้งชื่อห้องส่วนตัวของคุณ (หรือกด OK เพื่อสุ่มชื่อห้องลับ):', 'priv-' + Math.random().toString(36).substr(2, 6));
+                if (!custom) return;
+                currentRoom = custom.trim();
+                isPrivate = true;
+            } else {
+                currentRoom = 'Global-Public-Plaza';
+                isPrivate = false;
+            }
+            resetAndReconnect();
+        }
+
+        function resetAndReconnect() {
+            for (let id in connections) connections[id].close();
+            connections = {};
+            if (mqttClient) mqttClient.end();
+            if (peer) peer.destroy();
+            
+            roomState = { pin: { text: '', updatedAt: 0 }, messages: [], files: {} };
+            seenPacketIds.clear();
+            document.getElementById('pinText').value = '';
+            document.getElementById('chatBox').innerHTML = '';
+            renderFileList();
+            updateRamDisplay();
+            updateMeshBadge();
+            updateZoneUI();
+            
+            const newUrl = isPrivate ? `${window.location.pathname}?room=${encodeURIComponent(currentRoom)}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            
+            initNetwork();
+        }
+
+        function copyCurrentLink() {
+            navigator.clipboard.writeText(window.location.href);
+            alert('คัดลอกลิงก์พื้นที่นี้เรียบร้อย:
+' + window.location.href);
+        }
+
+        function updateMeshBadge() {
+            const count = Object.keys(connections).length;
+            document.getElementById('meshBadge').innerText = `เชื่อมต่อเพื่อนบ้าน: ${count} / ${MAX_NEIGHBORS} โหนด`;
+        }
+
+        function updateRamDisplay() {
+            let total = 0;
+            for (let id in roomState.files) {
+                if (roomState.files[id].buffer) total += roomState.files[id].buffer.byteLength;
+            }
+            const mb = (total / (1024 * 1024)).toFixed(2);
+            document.getElementById('ramBadge').innerText = `RAM พื้นที่นี้: ${mb} / 50 MB`;
+            return total;
+        }
+
+        function cleanupExpiredRam() {
+            const now = Date.now();
+            roomState.messages = roomState.messages.filter(m => (now - m.time) < MSG_TTL_MS);
+            let changed = false;
+            for (let id in roomState.files) {
+                if ((now - roomState.files[id].time) >= MSG_TTL_MS) {
+                    delete roomState.files[id];
+                    changed = true;
+                }
+            }
+            if (changed) {
+                renderFileList();
+                updateRamDisplay();
+            }
+        }
+
+        function appendChatUI(html, type = 'sys') {
+            const box = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.innerHTML = html;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function initNetwork() {
+            myPeerId = 'plaza-' + Math.random().toString(36).substr(2, 6);
+            peer = new Peer(myPeerId, {
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                appendChatUI(`สร้างโหนดสำเร็จ: <b>${id}</b>`);
+                connectMQTT();
+            });
+
+            peer.on('connection', (conn) => {
+                if (blockedPeers.has(conn.peer) || Object.keys(connections).length >= MAX_NEIGHBORS) {
+                    conn.close();
+                    return;
+                }
+                setupDataConn(conn);
+            });
+
+            peer.on('call', (call) => {
+                if (blockedPeers.has(call.peer)) return;
+                call.answer(localStream);
+                call.on('stream', (remoteStream) => addVideoStream(call.peer, remoteStream));
+            });
+        }
+
+        function connectMQTT() {
+            const topic = 'openplaza-mesh-v2/' + currentRoom;
+            const url = brokers[brokerIndex];
+            document.getElementById('status').innerText = `สถานะ: กำลังเชื่อมต่อจุดนัดพบ (${brokerIndex === 0 ? 'หลัก' : 'สำรอง'})...`;
+
+            mqttClient = mqtt.connect(url, { connectTimeout: 4500 });
+
+            mqttClient.on('connect', () => {
+                document.getElementById('status').innerText = `สถานะ: ออนไลน์อัตโนมัติใน [${currentRoom}]`;
+                mqttClient.subscribe(topic);
+                broadcastPresence();
+                appendChatUI('เชื่อมต่อจัตุรัสกลางสำเร็จ กำลังค้นหาเพื่อนบ้านและซิงค์ RAM...');
+            });
+
+            mqttClient.on('error', () => {
+                mqttClient.end();
+                brokerIndex = (brokerIndex + 1) % brokers.length;
+                setTimeout(connectMQTT, 1000);
+            });
+
+            mqttClient.on('message', (t, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    if (data.type === 'HELLO' && data.peerId !== myPeerId && !blockedPeers.has(data.peerId)) {
+                        if (!connections[data.peerId] && Object.keys(connections).length < MAX_NEIGHBORS) {
+                            const conn = peer.connect(data.peerId, { reliable: true });
+                            setupDataConn(conn);
+                        }
+                    }
+                } catch (e) {}
+            });
+        }
+
+        function broadcastPresence() {
+            if (mqttClient && mqttClient.connected && Object.keys(connections).length < MAX_NEIGHBORS) {
+                const topic = 'openplaza-mesh-v2/' + currentRoom;
+                mqttClient.publish(topic, JSON.stringify({ type: 'HELLO', peerId: myPeerId }));
+            }
+        }
+
+        // ระบบกระจายแพ็กเก็ตแบบ Gossip Relay (ส่งต่อเป็นทอดๆ ทั่วทั้งโครงข่าย)
+        function gossipBroadcast(packet, excludePeerId = null) {
+            if (packet.packetId) seenPacketIds.add(packet.packetId);
+            for (let id in connections) {
+                if (id !== excludePeerId && connections[id].open) {
+                    connections[id].send(packet);
+                }
+            }
+        }
+
+        // ระบบตรวจจับสแปม (Rate Limiter)
+        function isSpamming(peerId) {
+            const now = Date.now();
+            const last = peerLastMsgTime[peerId] || 0;
+            peerLastMsgTime[peerId] = now;
+            if (now - last < RATE_LIMIT_MS) {
+                peerSpamCount[peerId] = (peerSpamCount[peerId] || 0) + 1;
+                if (peerSpamCount[peerId] >= 5) {
+                    blockedPeers.add(peerId);
+                    if (connections[peerId]) connections[peerId].close();
+                    appendChatUI(`🛡️ ระบบป้องกันสแปมบล็อกโหนด <b>${peerId}</b> อัตโนมัติเนื่องจากส่งข้อมูลถี่เกินไป`, 'warn');
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function setupDataConn(conn) {
+            conn.on('open', () => {
+                if (Object.keys(connections).length >= MAX_NEIGHBORS) {
+                    conn.close();
+                    return;
+                }
+                connections[conn.peer] = conn;
+                updateMeshBadge();
+                appendChatUI(`✅ เชื่อมต่อเพื่อนบ้าน <b>${conn.peer}</b> สำเร็จ`);
+
+                // ส่งสถานะใน RAM ปัจจุบันไปให้เพื่อนบ้านใหม่ซิงค์ทันที
+                const fileMetas = {};
+                for (let fId in roomState.files) {
+                    fileMetas[fId] = {
+                        name: roomState.files[fId].name,
+                        size: roomState.files[fId].size,
+                        time: roomState.files[fId].time,
+                        seeders: Array.from(roomState.files[fId].seeders)
+                    };
+                }
+                conn.send({
+                    type: 'SYNC_STATE',
+                    pin: roomState.pin,
+                    messages: roomState.messages,
+                    fileMetas: fileMetas
+                });
+
+                if (localStream) peer.call(conn.peer, localStream);
+            });
+
+            conn.on('data', (data) => {
+                if (blockedPeers.has(conn.peer)) return;
+
+                // ป้องกันแพ็กเก็ตวนลูปซ้ำซ้อนในโครงข่าย Mesh
+                if (data.packetId) {
+                    if (seenPacketIds.has(data.packetId)) return;
+                    seenPacketIds.add(data.packetId);
+                }
+
+                if (data.type === 'SYNC_STATE') {
+                    if (data.pin && data.pin.updatedAt > roomState.pin.updatedAt) {
+                        roomState.pin = data.pin;
+                        document.getElementById('pinText').value = data.pin.text;
+                    }
+                    let count = 0;
+                    if (data.messages) {
+                        data.messages.forEach(m => {
+                            if (!seenPacketIds.has(m.id)) {
+                                seenPacketIds.add(m.id);
+                                roomState.messages.push(m);
+                                appendChatUI(`🕒 <b>[${m.sender}]:</b> ${m.text}`, 'sync');
+                                count++;
+                            }
+                        });
+                    }
+                    if (data.fileMetas) {
+                        for (let fId in data.fileMetas) {
+                            const meta = data.fileMetas[fId];
+                            if (!roomState.files[fId]) {
+                                roomState.files[fId] = { name: meta.name, size: meta.size, time: meta.time, buffer: null, seeders: new Set(meta.seeders) };
+                            } else {
+                                meta.seeders.forEach(s => roomState.files[fId].seeders.add(s));
+                            }
+                        }
+                        renderFileList();
+                    }
+                    if (count > 0) appendChatUI(`🔄 ซิงค์ข้อความจากเพื่อนบ้าน ${count} รายการ`, 'sync');
+                }
+                else if (data.type === 'PIN_UPDATE') {
+                    if (isSpamming(conn.peer)) return;
+                    if (data.pin.updatedAt > roomState.pin.updatedAt) {
+                        roomState.pin = data.pin;
+                        document.getElementById('pinText').value = data.pin.text;
+                        appendChatUI(`📌 <b>${conn.peer}</b> อัปเดตกระดานปักหมุด`, 'sync');
+                        gossipBroadcast(data, conn.peer); // ส่งต่อให้เพื่อนบ้านอื่น
+                    }
+                }
+                else if (data.type === 'CHAT') {
+                    if (isSpamming(conn.peer)) return;
+                    roomState.messages.push(data.msg);
+                    if (roomState.messages.length > MAX_HISTORY) roomState.messages.shift();
+                    appendChatUI(`<b>[${data.msg.sender}]:</b> ${data.msg.text}`, 'p2p');
+                    gossipBroadcast(data, conn.peer); // ส่งต่อเป็นทอดๆ
+                }
+                else if (data.type === 'FILE_ANNOUNCE') {
+                    if (isSpamming(conn.peer)) return;
+                    if (!roomState.files[data.fileId]) {
+                        roomState.files[data.fileId] = { name: data.name, size: data.size, time: Date.now(), buffer: null, seeders: new Set([data.seederId]) };
+                        renderFileList();
+                        appendChatUI(`📁 <b>${data.seederId}</b> ฝากไฟล์เข้า RAM: <b>${data.name}</b>`, 'p2p');
+                    } else {
+                        roomState.files[data.fileId].seeders.add(data.seederId);
+                        renderFileList();
+                    }
+                    gossipBroadcast(data, conn.peer);
+                }
+                else if (data.type === 'REQ_FILE') {
+                    const f = roomState.files[data.fileId];
+                    if (f && f.buffer) sendBufferInChunks(conn, data.fileId, f.name, f.size, f.buffer);
+                }
+                else if (data.type === 'FILE_CHUNK_START') {
+                    incomingChunks[data.fileId] = { name: data.name, size: data.size, chunks: [], received: 0 };
+                }
+                else if (data.type === 'FILE_CHUNK_DATA') {
+                    const inc = incomingChunks[data.fileId];
+                    if (!inc) return;
+                    inc.chunks.push(data.chunk);
+                    inc.received += data.chunk.byteLength;
+                    document.getElementById('fileProgress').innerText = `กำลังดึงไฟล์ ${inc.name}: ${Math.round((inc.received / inc.size) * 100)}%`;
+
+                    if (inc.received >= inc.size) {
+                        const blob = new Blob(inc.chunks);
+                        blob.arrayBuffer().then(buf => {
+                            // เก็บลง RAM และประกาศตัวเป็น Seeder ช่วยส่งต่อให้คนอื่น
+                            if (updateRamDisplay() + buf.byteLength <= MAX_RAM_BYTES) {
+                                if (!roomState.files[data.fileId]) {
+                                    roomState.files[data.fileId] = { name: inc.name, size: inc.size, time: Date.now(), buffer: buf, seeders: new Set([myPeerId]) };
+                                } else {
+                                    roomState.files[data.fileId].buffer = buf;
+                                    roomState.files[data.fileId].seeders.add(myPeerId);
+                                }
+                                updateRamDisplay();
+                                renderFileList();
+                                gossipBroadcast({ packetId: 'seed-' + Date.now() + myPeerId, type: 'FILE_ANNOUNCE', fileId: data.fileId, name: inc.name, size: inc.size, seederId: myPeerId });
+                            }
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = inc.name;
+                            a.click();
+                            document.getElementById('fileProgress').innerText = '';
+                            delete incomingChunks[data.fileId];
+                        });
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                delete connections[conn.peer];
+                updateMeshBadge();
+                const vid = document.getElementById('vid-' + conn.peer);
+                if (vid) vid.remove();
+                appendChatUI(`❌ เพื่อนบ้าน <b>${conn.peer}</b> ออกจากพื้นที่แล้ว`);
+                broadcastPresence(); // หาเพื่อนบ้านใหม่มาแทนที่ให้ครบโควตา
+            });
+        }
+
+        function updatePinBoard() {
+            const text = document.getElementById('pinText').value;
+            roomState.pin = { text, updatedAt: Date.now() };
+            gossipBroadcast({ packetId: 'pin-' + Date.now() + myPeerId, type: 'PIN_UPDATE', pin: roomState.pin });
+            appendChatUI('📌 อัปเดตกระดานปักหมุดให้ทุกคนในพื้นที่แล้ว', 'sync');
+        }
+
+        function sendText() {
+            const now = Date.now();
+            if (now - myLastSendTime < RATE_LIMIT_MS) return; // ป้องกันตัวเองกดรัวเกินไป
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            myLastSendTime = now;
+            const msgId = myPeerId + '-' + now;
+            const msgObj = { id: msgId, sender: myPeerId, text, time: now };
+            
+            seenPacketIds.add(msgId);
+            roomState.messages.push(msgObj);
+            if (roomState.messages.length > MAX_HISTORY) roomState.messages.shift();
+            
+            appendChatUI(`<b>[ฉัน]:</b> ${text}`, 'p2p');
+            gossipBroadcast({ packetId: msgId, type: 'CHAT', msg: msgObj });
+            input.value = '';
+        }
+
+        async function shareFileToRam() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return alert('กรุณาเลือกไฟล์ก่อนครับ');
+            if (updateRamDisplay() + file.size > MAX_RAM_BYTES) {
+                return alert('ไฟล์ใหญ่เกินโควตา RAM ของพื้นที่นี้ (สูงสุด 50 MB) ครับ');
+            }
+
+            const buffer = await file.arrayBuffer();
+            const fileId = 'f-' + Math.random().toString(36).substr(2, 7);
+            roomState.files[fileId] = { name: file.name, size: file.size, time: Date.now(), buffer: buffer, seeders: new Set([myPeerId]) };
+            
+            updateRamDisplay();
+            renderFileList();
+
+            gossipBroadcast({
+                packetId: 'ann-' + fileId,
+                type: 'FILE_ANNOUNCE',
+                fileId,
+                name: file.name,
+                size: file.size,
+                seederId: myPeerId
+            });
+            appendChatUI(`📁 ฝากไฟล์ <b>${file.name}</b> เข้าสู่ RAM ส่วนกลางเรียบร้อย`, 'p2p');
+            fileInput.value = '';
+        }
+
+        function renderFileList() {
+            const listEl = document.getElementById('ramFileList');
+            listEl.innerHTML = '';
+            for (let fId in roomState.files) {
+                const f = roomState.files[fId];
+                const sizeMB = (f.size / (1024 * 1024)).toFixed(2);
+                const seederCount = f.seeders ? f.seeders.size : 1;
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.innerHTML = `
+                    <div>
+                        <strong>📄 ${f.name}</strong> (${sizeMB} MB)<br>
+                        <span class="sys">${f.buffer ? '🟢 อยู่ใน RAM เครื่องคุณ (พร้อมช่วยส่งต่อ)' : `⚡ มีผู้ช่วยส่งต่อ (Seeders) ${seederCount} เครื่อง`}</span>
+                    </div>
+                    <button class="btn-blue" onclick="downloadSwarmFile('${fId}')">⬇️ ดึงไฟล์</button>
+                `;
+                listEl.appendChild(div);
+            }
+        }
+
+        function downloadSwarmFile(fileId) {
+            const f = roomState.files[fileId];
+            if (!f) return;
+            if (f.buffer) {
+                const blob = new Blob([f.buffer]);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = f.name;
+                a.click();
+                return;
+            }
+            // ค้นหาเพื่อนบ้านที่เชื่อมต่ออยู่และมีไฟล์นี้ใน RAM (Swarm Selection)
+            const availableSeeders = Array.from(f.seeders).filter(sId => connections[sId] && connections[sId].open);
+            if (availableSeeders.length > 0) {
+                // สุ่มเลือก Seeder เพื่อกระจายโหลดไม่ให้ไปกระจุกที่เครื่องเดียว
+                const chosenSeeder = availableSeeders[Math.floor(Math.random() * availableSeeders.length)];
+                document.getElementById('fileProgress').innerText = `กำลังดึงไฟล์ ${f.name} จากโหนดผู้ช่วย (${chosenSeeder})...`;
+                connections[chosenSeeder].send({ type: 'REQ_FILE', fileId });
+            } else {
+                alert('โหนดที่ถือไฟล์นี้ใน RAM ออกจากพื้นที่ไปแล้วครับ');
+            }
+        }
+
+        async function sendBufferInChunks(conn, fileId, name, size, buffer) {
+            const chunkSize = 65536;
+            conn.send({ type: 'FILE_CHUNK_START', fileId, name, size });
+            for (let offset = 0; offset < size; offset += chunkSize) {
+                if (!conn.open) break;
+                // ระบบควบคุมการไหล (Backpressure Control) ป้องกันท่อเต็ม
+                while (conn.dataChannel && conn.dataChannel.bufferedAmount > 1048576) {
+                    await new Promise(r => setTimeout(r, 15));
+                }
+                const slice = buffer.slice(offset, offset + chunkSize);
+                conn.send({ type: 'FILE_CHUNK_DATA', fileId, chunk: slice });
+            }
+        }
+
+        async function toggleMedia(mode) {
+            if (localStream && activeMediaMode === mode) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+                activeMediaMode = null;
+                const myVid = document.getElementById('vid-me');
+                if (myVid) myVid.remove();
+                return;
+            }
+            try {
+                if (localStream) localStream.getTracks().forEach(t => t.stop());
+                localStream = (mode === 'camera') 
+                    ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                activeMediaMode = mode;
+                addVideoStream('me', localStream, true);
+                for (let id in connections) {
+                    const call = peer.call(id, localStream);
+                    call.on('stream', (remoteStream) => addVideoStream(id, remoteStream));
+                }
+            } catch (err) {
+                alert('ไม่สามารถเข้าถึงกล้องหรือหน้าจอได้: ' + err.message);
+            }
+        }
+
+        function addVideoStream(id, stream, isMuted = false) {
+            let video = document.getElementById('vid-' + id);
+            if (!video) {
+                video = document.createElement('video');
+                video.id = 'vid-' + id;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = isMuted;
+                document.getElementById('videoGrid').appendChild(video);
+            }
+            video.srcObject = stream;
+        }
+    </script>
+</body>
+</html>

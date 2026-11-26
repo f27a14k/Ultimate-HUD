@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal P2P & IoT Hub</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 15px; max-width: 750px; margin: auto; }
+        .card { background: #1e1e1e; padding: 18px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #2c2c2c; }
+        input, button { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: none; box-sizing: border-box; font-size: 15px; }
+        input[type="text"] { background: #2c2c2c; color: #fff; }
+        button { background: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+        .btn-green { background: #00b894; }
+        .btn-purple { background: #6c5ce7; }
+        .btn-orange { background: #e17055; }
+        #chatBox { height: 220px; overflow-y: auto; background: #141414; padding: 10px; border-radius: 8px; border: 1px solid #333; margin-top: 10px; }
+        .msg { margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; background: #252525; word-wrap: break-word; font-size: 14px; }
+        .sys { color: #888; font-style: italic; }
+        .p2p { border-left: 4px solid #00e676; }
+        .mqtt { border-left: 4px solid #ff9100; }
+        #videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+        video { width: 100%; border-radius: 8px; background: #000; border: 1px solid #444; }
+        a.dl-link { color: #00e676; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>📡 ช่องสัญญาณ P2P & IoT ไร้ขีดจำกัด</h2>
+        <input type="text" id="channelInput" placeholder="ตั้งชื่อช่องสัญญาณ (เช่น room-9988)" value="my-secret-room-101">
+        <button id="joinBtn" onclick="joinChannel()">เข้าสู่ช่องสัญญาณ</button>
+        <p id="status" class="sys" style="margin-bottom:0;">สถานะ: ยังไม่ได้เชื่อมต่อ</p>
+    </div>
+
+    <div class="card" id="commPanel" style="display:none;">
+        <div id="videoGrid"></div>
+
+        <div class="btn-group">
+            <button class="btn-green" onclick="startMedia('camera')">📷 เปิดกล้อง / ไมค์</button>
+            <button class="btn-purple" onclick="startMedia('screen')">🖥️ แชร์หน้าจอ</button>
+        </div>
+
+        <div style="margin-top: 10px; background: #252525; padding: 10px; border-radius: 8px;">
+            <label style="font-size: 14px; color: #bbb;">📁 ส่งไฟล์ตรง P2P (ไม่จำกัดขนาด):</label>
+            <input type="file" id="fileInput" style="background: transparent; padding: 5px 0;">
+            <button class="btn-orange" onclick="sendLargeFile()">ส่งไฟล์ให้ทุกคนในห้อง</button>
+            <div id="fileProgress" class="sys" style="margin-top:5px;"></div>
+        </div>
+
+        <div id="chatBox"></div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ หรือคำสั่งส่งไปหา IoT..." onkeypress="if(event.key==='Enter') sendText()">
+            <button onclick="sendText()" style="width: 100px;">ส่ง</button>
+        </div>
+    </div>
+
+    <script>
+        let mqttClient, peer, localStream;
+        let connections = {};
+        let incomingFiles = {};
+        let myPeerId = 'user-' + Math.random().toString(36).substr(2, 7);
+        let currentTopic = '';
+
+        function log(html, type = 'sys') {
+            const box = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.innerHTML = html;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function joinChannel() {
+            const channel = document.getElementById('channelInput').value.trim();
+            if (!channel) return alert('กรุณาใส่ชื่อช่องสัญญาณ');
+
+            document.getElementById('joinBtn').disabled = true;
+            document.getElementById('channelInput').disabled = true;
+            document.getElementById('commPanel').style.display = 'block';
+            currentTopic = 'universal-p2p-app/' + channel;
+
+            peer = new Peer(myPeerId, {
+                config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+            });
+
+            peer.on('open', (id) => {
+                log(`รหัสเครื่องของคุณ: <b>${id}</b>`);
+                connectMQTT();
+            });
+
+            peer.on('connection', (conn) => setupDataConn(conn));
+
+            peer.on('call', (call) => {
+                call.answer(localStream);
+                call.on('stream', (remoteStream) => addVideoStream(call.peer, remoteStream));
+            });
+        }
+
+        function connectMQTT() {
+            mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+            mqttClient.on('connect', () => {
+                document.getElementById('status').innerText = `สถานะ: ออนไลน์ในห้อง [${document.getElementById('channelInput').value}]`;
+                mqttClient.subscribe(currentTopic);
+                mqttClient.publish(currentTopic, JSON.stringify({ type: 'HELLO', peerId: myPeerId }));
+                log('เชื่อมต่อระบบค้นหาสำเร็จ รอเพื่อนหรือบอร์ด IoT...');
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    if (data.type === 'HELLO' && data.peerId !== myPeerId && !connections[data.peerId]) {
+                        const conn = peer.connect(data.peerId, { reliable: true });
+                        setupDataConn(conn);
+                        if (localStream) peer.call(data.peerId, localStream);
+                    } else if (data.type === 'IOT_DATA') {
+                        log(`🤖 <b>[IoT]:</b> ${data.payload}`, 'mqtt');
+                    }
+                } catch (e) {
+                    log(`🤖 <b>[IoT Raw]:</b> ${message.toString()}`, 'mqtt');
+                }
+            });
+        }
+
+        function setupDataConn(conn) {
+            conn.on('open', () => {
+                connections[conn.peer] = conn;
+                log(`✅ เชื่อมต่อตรง P2P กับ <b>${conn.peer}</b> สำเร็จ`);
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'CHAT') {
+                    log(`💬 <b>[${conn.peer}]:</b> ${data.text}`, 'p2p');
+                } else if (data.type === 'FILE_META') {
+                    incomingFiles[data.fileId] = { name: data.name, size: data.size, chunks: [], received: 0 };
+                    log(`📥 กำลังรับไฟล์: <b>${data.name}</b> (${(data.size / 1048576).toFixed(2)} MB)...`, 'p2p');
+                } else if (data.type === 'FILE_CHUNK') {
+                    const file = incomingFiles[data.fileId];
+                    if (!file) return;
+                    file.chunks.push(data.chunk);
+                    file.received += data.chunk.byteLength;
+                    if (file.received >= file.size) {
+                        const blob = new Blob(file.chunks);
+                        const url = URL.createObjectURL(blob);
+                        log(`✅ รับไฟล์เสร็จสิ้น: <a class="dl-link" href="${url}" download="${file.name}">คลิกเพื่อดาวน์โหลด ${file.name}</a>`, 'p2p');
+                        delete incomingFiles[data.fileId];
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                delete connections[conn.peer];
+                const vid = document.getElementById('vid-' + conn.peer);
+                if (vid) vid.remove();
+                log(`❌ <b>${conn.peer}</b> ออกจากห้องแล้ว`);
+            });
+        }
+
+        function sendText() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            for (let id in connections) {
+                connections[id].send({ type: 'CHAT', text: text });
+            }
+            mqttClient.publish(currentTopic, JSON.stringify({ type: 'CMD', payload: text }));
+            log(`📤 <b>[ฉัน]:</b> ${text}`, 'p2p');
+            input.value = '';
+        }
+
+        async function sendLargeFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return alert('กรุณาเลือกไฟล์ก่อนครับ');
+            if (Object.keys(connections).length === 0) return alert('ยังไม่มีเพื่อน P2P อยู่ในห้องครับ');
+
+            const fileId = Math.random().toString(36).substr(2, 9);
+            const chunkSize = 65536;
+            let offset = 0;
+
+            for (let id in connections) {
+                connections[id].send({ type: 'FILE_META', fileId, name: file.name, size: file.size });
+            }
+
+            const progressEl = document.getElementById('fileProgress');
+            while (offset < file.size) {
+                const slice = file.slice(offset, offset + chunkSize);
+                const buffer = await slice.arrayBuffer();
+                for (let id in connections) {
+                    connections[id].send({ type: 'FILE_CHUNK', fileId, chunk: buffer });
+                }
+                offset += buffer.byteLength;
+                const percent = Math.min(100, Math.round((offset / file.size) * 100));
+                progressEl.innerText = `กำลังส่งไฟล์ ${file.name}: ${percent}%`;
+                await new Promise(r => setTimeout(r, 5));
+            }
+            log(`📤 ส่งไฟล์ <b>${file.name}</b> สำเร็จ!`, 'p2p');
+            progressEl.innerText = '';
+            fileInput.value = '';
+        }
+
+        async function startMedia(mode) {
+            try {
+                if (mode === 'camera') {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } else {
+                    localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                }
+                addVideoStream('me', localStream, true);
+                for (let id in connections) {
+                    const call = peer.call(id, localStream);
+                    call.on('stream', (remoteStream) => addVideoStream(id, remoteStream));
+                }
+            } catch (err) {
+                alert('ไม่สามารถเข้าถึงกล้องหรือหน้าจอได้: ' + err.message);
+            }
+        }
+
+        function addVideoStream(id, stream, isMuted = false) {
+            let video = document.getElementById('vid-' + id);
+            if (!video) {
+                video = document.createElement('video');
+                video.id = 'vid-' + id;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = isMuted;
+                document.getElementById('videoGrid').appendChild(video);
+            }
+            video.srcObject = stream;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TANK BATTLE 2000 - QR Auto-Join</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+    
+    /* หน้าเลือกโหมด */
+    #role-select { text-align: center; padding: 20px; max-width: 500px; }
+    .btn { padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px; cursor: pointer; margin: 10px; font-weight: bold; transition: 0.2s; }
+    .btn-host { background: #2ecc71; color: #000; box-shadow: 0 4px 0 #27ae60; }
+    .btn-host:active { transform: translateY(3px); box-shadow: 0 1px 0 #27ae60; }
+    .btn-pad { background: #3498db; color: #fff; box-shadow: 0 4px 0 #2980b9; }
+    .btn-pad:active { transform: translateY(3px); box-shadow: 0 1px 0 #2980b9; }
+
+    /* โหมดสนามรบ (Host / TV) */
+    #host-view { display: none; width: 100vw; height: 100vh; position: relative; background: #0d0d0d; flex-direction: column; align-items: center; justify-content: center; }
+    canvas { background: #1e272e; border: 4px solid #485460; box-shadow: 0 0 30px rgba(0,0,0,0.9); max-width: 96vw; max-height: 88vh; border-radius: 6px; }
+    
+    /* แถบข้อมูลห้อง + QR Code บนจอทีวี */
+    #host-hud { position: absolute; top: 12px; left: 12px; background: rgba(15, 20, 25, 0.9); padding: 12px; border-radius: 12px; border: 1px solid #3c4856; display: flex; align-items: center; gap: 12px; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+    #qrcode { background: #fff; padding: 6px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .room-code-text { font-size: 28px; font-weight: 900; color: #f1c40f; letter-spacing: 3px; margin: 2px 0; }
+    .player-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; margin: 2px 2px 0 0; font-weight: bold; color: #000; }
+
+    /* โหมดจอยสติ๊ก (Controller / Mobile) */
+    #pad-view { display: none; width: 100vw; height: 100vh; flex-direction: column; justify-content: space-between; padding: 15px; background: #1e272e; }
+    #pad-connect-box { background: rgba(0,0,0,0.5); padding: 25px; border-radius: 15px; max-width: 360px; margin: auto; text-align: center; border: 1px solid #485460; }
+    input[type="tel"] { width: 180px; font-size: 32px; text-align: center; letter-spacing: 6px; padding: 10px; border-radius: 8px; border: 2px solid #3498db; background: #111; color: #f1c40f; font-weight: bold; margin: 15px 0; }
+    
+    #gamepad-controls { display: none; width: 100%; height: 100%; flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 25px; }
+    .dpad { display: grid; grid-template-columns: repeat(3, 68px); grid-template-rows: repeat(3, 68px); gap: 6px; }
+    .d-btn { background: #2f3640; border: 2px solid #718093; border-radius: 14px; color: white; font-size: 26px; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+    .d-btn:active, .d-btn.active { background: #f1c40f; color: #000; border-color: #fff; }
+    
+    .fire-btn { width: 125px; height: 125px; border-radius: 50%; background: #e84118; border: 5px solid #c23616; color: white; font-size: 26px; font-weight: bold; box-shadow: 0 6px 0 #8c2710; touch-action: manipulation; }
+    .fire-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #8c2710; background: #ff5252; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. หน้าเลือกโหมด -->
+  <div id="role-select">
+    <h1>🚜 TANK BATTLE 2000</h1>
+    <p style="color:#aaa;">สแกน QR Code หรือกรอกรหัส 4 หลักเพื่อจอยอัตโนมัติ</p>
+    <button class="btn btn-host" onclick="startHost()">📺 เปิดสนามรบ (จอทีวี / Host)</button>
+    <button class="btn btn-pad" onclick="startController()">🎮 เป็นจอยบังคับ (มือถือ / Player)</button>
+  </div>
+
+  <!-- 2. หน้าจอสนามรบ (Host) -->
+  <div id="host-view">
+    <div id="host-hud">
+      <div id="qrcode" title="สแกนเพื่อจอยเกมทันที"></div>
+      <div>
+        <div style="font-size:12px; color:#aaa;">รหัสเข้าห้อง (Room ID):</div>
+        <div class="room-code-text" id="room-code-display">....</div>
+        <div id="qr-hint" style="font-size:11px; color:#2ecc71;">สแกน QR เพื่อบังคับรถถังทันที</div>
+        <div id="player-list" style="margin-top:6px;"></div>
+      </div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <!-- 3. หน้าจอจอยสติ๊ก (Controller) -->
+  <div id="pad-view">
+    <div id="pad-connect-box">
+      <h2 style="margin-top:0;">🎮 เข้าร่วมสนามรบ</h2>
+      <div style="font-size:14px; color:#ccc;">ใส่รหัสห้อง 4 หลักบนหน้าจอทีวี</div>
+      <input type="tel" id="room-input" maxlength="4" placeholder="0000">
+      <br>
+      <button class="btn btn-pad" id="join-btn" onclick="joinRoom()">เข้าร่วมเกมทันที</button>
+      <div id="pad-msg" style="margin-top:10px; font-size:13px; color:#f1c40f;"></div>
+    </div>
+
+    <div id="gamepad-controls">
+      <div class="dpad">
+        <div></div>
+        <button class="d-btn" data-dir="up">▲</button>
+        <div></div>
+        <button class="d-btn" data-dir="left">◀</button>
+        <div style="background:#2f3640; border-radius:50%; opacity:0.5;"></div>
+        <button class="d-btn" data-dir="right">▶</button>
+        <div></div>
+        <button class="d-btn" data-dir="down">▼</button>
+        <div></div>
+      </div>
+
+      <div style="text-align:center;">
+        <div id="player-tag" style="padding:6px 14px; border-radius:20px; font-weight:bold; color:#000; margin-bottom:15px; display:inline-block;">กำลังเชื่อมต่อ...</div>
+        <br>
+        <button class="fire-btn" id="fire-btn">FIRE</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const PREFIX = 'tank2000-arena-';
+  const COLORS = ['#2ecc71', '#e74c3c', '#3498db', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#ff7979'];
+  
+  // ระบบเสียง 8-Bit สังเคราะห์ (ไม่ต้องใช้ไฟล์เสียงภายนอก)
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playTone(freq, type, duration, vol = 0.1) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  // เช็ก URL Parameter เผื่อสแกน QR Code เข้ามา
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const autoRoom = params.get('room');
+    if (autoRoom && autoRoom.length === 4) {
+      startController();
+      document.getElementById('room-input').value = autoRoom;
+      setTimeout(() => joinRoom(), 300);
+    }
+  });
+
+  // ==========================================
+  // ส่วนที่ 1: ระบบสนามรบ (HOST / TV)
+  // ==========================================
+  let hostPeer = null;
+  let players = {};
+  let playerCounter = 0;
+  let bullets = [];
+  let walls = [];
+  let explosions = [];
+
+  function startHost() {
+    document.getElementById('role-select').style.display = 'none';
+    document.getElementById('host-view').style.display = 'flex';
+    
+    const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    hostPeer = new Peer(PREFIX + roomCode);
+
+    hostPeer.on('open', () => {
+      document.getElementById('room-code-display').innerText = roomCode;
+      
+      // สร้าง QR Code พร้อมลิงก์ Auto-Join
+      const baseUrl = window.location.href.split('?')[0];
+      const joinUrl = baseUrl.startsWith('http') ? `${baseUrl}?room=${roomCode}` : roomCode;
+      new QRCode(document.getElementById('qrcode'), {
+        text: joinUrl,
+        width: 85,
+        height: 85,
+        colorDark: "#000000",
+        colorLight: "#ffffff"
+      });
+      if (!baseUrl.startsWith('http')) {
+        document.getElementById('qr-hint').innerText = 'อัปขึ้น GitHub เพื่อสแกน QR ข้ามเครื่อง';
+      }
+    });
+
+    // รับผู้เล่นใหม่ที่จอยเข้ามาอัตโนมัติ
+    hostPeer.on('connection', (conn) => {
+      playerCounter++;
+      const pId = 'P' + playerCounter;
+      const color = COLORS[(playerCounter - 1) % COLORS.length];
+
+      conn.on('open', () => {
+        playTone(520, 'square', 0.15);
+        // ส่งข้อมูลสีและชื่อประจำตัวกลับไปให้จอยผู้เล่น
+        conn.send({ type: 'welcome', id: pId, color: color });
+
+        // เสกรถถังเข้าสนามทันที
+        players[pId] = {
+          id: pId,
+          color: color,
+          x: 50 + ((playerCounter - 1) * 160) % 700,
+          y: (playerCounter % 2 === 1) ? 40 : 520,
+          dir: (playerCounter % 2 === 1) ? 'down' : 'up',
+          speed: 3.2,
+          input: { up: false, down: false, left: false, right: false },
+          cooldown: 0,
+          score: 0
+        };
+        updatePlayerBadge();
+      });
+
+      conn.on('data', (msg) => {
+        const p = players[pId];
+        if (!p) return;
+        if (msg.type === 'move') p.input = msg.state;
+        if (msg.type === 'fire' && p.cooldown <= 0) {
+          shootBullet(p);
+          p.cooldown = 22;
+        }
+      });
+
+      conn.on('close', () => {
+        delete players[pId];
+        updatePlayerBadge();
+      });
+    });
+
+    initMap();
+    requestAnimationFrame(gameLoop);
+  }
+
+  function initMap() {
+    for (let x = 120; x <= 640; x += 80) {
+      for (let y = 100; y <= 460; y += 80) {
+        if (Math.random() > 0.25) {
+          walls.push({ x, y, w: 40, h: 40, hp: 2 });
+        }
+      }
+    }
+  }
+
+  function updatePlayerBadge() {
+    const list = document.getElementById('player-list');
+    const arr = Object.values(players);
+    if (arr.length === 0) {
+      list.innerHTML = '<span style="font-size:12px; color:#888;">รอผู้เล่นเชื่อมต่อ...</span>';
+      return;
+    }
+    list.innerHTML = arr.map(p => 
+      `<span class="player-badge" style="background:${p.color}">${p.id}: ${p.score} แต้ม</span>`
+    ).join('');
+  }
+
+  function shootBullet(p) {
+    playTone(300, 'sawtooth', 0.08, 0.08);
+    let vx = 0, vy = 0;
+    if (p.dir === 'up') vy = -7.5;
+    if (p.dir === 'down') vy = 7.5;
+    if (p.dir === 'left') vx = -7.5;
+    if (p.dir === 'right') vx = 7.5;
+    bullets.push({ owner: p.id, color: p.color, x: p.x + 15, y: p.y + 15, vx, vy });
+  }
+
+  function spawnExplosion(x, y, color) {
+    explosions.push({ x, y, color, radius: 5, alpha: 1 });
+  }
+
+  function rectIntersect(r1, r2) {
+    return !(r2.x > r1.x + r1.w || r2.x + r2.w < r1.x || r2.y > r1.y + r1.h || r2.y + r2.h < r1.y);
+  }
+
+  function gameLoop() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // วาดตารางพื้นหลังจางๆ สไตล์เรโทร
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    for (let gx = 0; gx < canvas.width; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, canvas.height); ctx.stroke(); }
+    for (let gy = 0; gy < canvas.height; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvas.width, gy); ctx.stroke(); }
+
+    // วาดกำแพง
+    walls.forEach(w => {
+      ctx.fillStyle = w.hp === 2 ? '#d35400' : '#e67e22';
+      ctx.fillRect(w.x, w.y, w.w, w.h);
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(w.x, w.y, w.w, w.h);
+    });
+
+    // อัปเดตและวาดรถถัง
+    Object.values(players).forEach(p => {
+      if (p.cooldown > 0) p.cooldown--;
+      let nx = p.x, ny = p.y;
+
+      if (p.input.up) { ny -= p.speed; p.dir = 'up'; }
+      else if (p.input.down) { ny += p.speed; p.dir = 'down'; }
+      else if (p.input.left) { nx -= p.speed; p.dir = 'left'; }
+      else if (p.input.right) { nx += p.speed; p.dir = 'right'; }
+
+      const tankBox = { x: nx, y: ny, w: 30, h: 30 };
+      const hitWall = walls.some(w => rectIntersect(tankBox, w));
+      if (nx >= 0 && nx <= canvas.width - 30 && ny >= 0 && ny <= canvas.height - 30 && !hitWall) {
+        p.x = nx; p.y = ny;
+      }
+
+      // ตัวถัง
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, 30, 30);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(p.x, p.y, 30, 30);
+
+      // ปืนใหญ่
+      ctx.fillStyle = '#fff';
+      if (p.dir === 'up') ctx.fillRect(p.x + 12, p.y - 8, 6, 15);
+      if (p.dir === 'down') ctx.fillRect(p.x + 12, p.y + 23, 6, 15);
+      if (p.dir === 'left') ctx.fillRect(p.x - 8, p.y + 12, 15, 6);
+      if (p.dir === 'right') ctx.fillRect(p.x + 23, p.y + 12, 15, 6);
+
+      // ป้ายชื่อ
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(p.id, p.x + 7, p.y - 11);
+    });
+
+    // อัปเดตกระสุน
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      let b = bullets[i];
+      b.x += b.vx;
+      b.y += b.vy;
+
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      const bBox = { x: b.x - 4, y: b.y - 4, w: 8, h: 8 };
+      const wIdx = walls.findIndex(w => rectIntersect(bBox, w));
+      if (wIdx !== -1) {
+        playTone(150, 'square', 0.06, 0.06);
+        spawnExplosion(b.x, b.y, '#e67e22');
+        walls[wIdx].hp--;
+        if (walls[wIdx].hp <= 0) walls.splice(wIdx, 1);
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      Object.values(players).forEach(target => {
+        if (target.id !== b.owner && rectIntersect(bBox, { x: target.x, y: target.y, w: 30, h: 30 })) {
+          playTone(100, 'sawtooth', 0.3, 0.15);
+          spawnExplosion(target.x + 15, target.y + 15, target.color);
+          if (players[b.owner]) players[b.owner].score++;
+          updatePlayerBadge();
+          target.x = Math.random() * 700 + 30;
+          target.y = Math.random() * 500 + 30;
+          bullets.splice(i, 1);
+        }
+      });
+    }
+
+    // วาดเอฟเฟกต์ระเบิด
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      let ex = explosions[i];
+      ex.radius += 2.5;
+      ex.alpha -= 0.06;
+      if (ex.alpha <= 0) { explosions.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = ex.alpha;
+      ctx.fillStyle = ex.color;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  // ==========================================
+  // ส่วนที่ 2: ระบบจอยสติ๊ก (CONTROLLER)
+  // ==========================================
+  let padPeer = null;
+  let padConn = null;
+  let moveState = { up: false, down: false, left: false, right: false };
+
+  function startController() {
+    document.getElementById('role-select').style.display = 'none';
+    document.getElementById('pad-view').style.display = 'flex';
+    setupPadButtons();
+  }
+
+  function joinRoom() {
+    const code = document.getElementById('room-input').value.trim();
+    if (code.length !== 4) {
+      document.getElementById('pad-msg').innerText = 'กรุณากรอกเลข 4 หลักให้ครบครับ';
+      return;
+    }
+
+    document.getElementById('pad-msg').innerText = 'กำลังเชื่อมต่อเข้าสนามรบ...';
+    document.getElementById('join-btn').disabled = true;
+
+    padPeer = new Peer();
+    padPeer.on('open', () => {
+      padConn = padPeer.connect(PREFIX + code, { reliable: false });
+      
+      padConn.on('open', () => {
+        document.getElementById('pad-connect-box').style.display = 'none';
+        document.getElementById('gamepad-controls').style.display = 'flex';
+      });
+
+      padConn.on('data', (msg) => {
+        if (msg.type === 'welcome') {
+          const tag = document.getElementById('player-tag');
+          tag.innerText = `คุณคือผู้เล่น ${msg.id}`;
+          tag.style.background = msg.color;
+        }
+      });
+
+      padConn.on('close', () => {
+        alert('การเชื่อมต่อกับสนามรบหลุด');
+        location.reload();
+      });
+    });
+
+    padPeer.on('error', () => {
+      document.getElementById('pad-msg').innerText = 'ไม่พบห้องนี้ หรือรหัสผิด ลองใหม่อีกครั้ง';
+      document.getElementById('join-btn').disabled = false;
+    });
+  }
+
+  function sendMove() {
+    if (padConn && padConn.open) {
+      padConn.send({ type: 'move', state: moveState }));
+    }
+  }
+
+  function setupPadButtons() {
+    document.querySelectorAll('.d-btn').forEach(btn => {
+      const dir = btn.getAttribute('data-dir');
+      const press = (e) => { e.preventDefault(); moveState[dir] = true; btn.classList.add('active'); sendMove(); };
+      const release = (e) => { e.preventDefault(); moveState[dir] = false; btn.classList.remove('active'); sendMove(); };
+      
+      btn.addEventListener('touchstart', press);
+      btn.addEventListener('touchend', release);
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', release);
+    });
+
+    const fireBtn = document.getElementById('fire-btn');
+    const fire = (e) => {
+      e.preventDefault();
+      if (padConn && padConn.open) {
+        padConn.send({ type: 'fire' });
+      }
+    };
+    fireBtn.addEventListener('touchstart', fire);
+    fireBtn.addEventListener('mousedown', fire);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w') { moveState.up = true; sendMove(); }
+      if (e.key === 'ArrowDown' || e.key === 's') { moveState.down = true; sendMove(); }
+      if (e.key === 'ArrowLeft' || e.key === 'a') { moveState.left = true; sendMove(); }
+      if (e.key === 'ArrowRight' || e.key === 'd') { moveState.right = true; sendMove(); }
+      if (e.code === 'Space') fire(e);
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w') { moveState.up = false; sendMove(); }
+      if (e.key === 'ArrowDown' || e.key === 's') { moveState.down = false; sendMove(); }
+      if (e.key === 'ArrowLeft' || e.key === 'a') { moveState.left = false; sendMove(); }
+      if (e.key === 'ArrowRight' || e.key === 'd') { moveState.right = false; sendMove(); }
+    });
+  }
+</script>
+</body>
+</html>

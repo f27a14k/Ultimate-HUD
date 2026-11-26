@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tank Arena 2000 - P2P Multiplayer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121417;
+    color: #f1f3f5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  header {
+    width: 100%;
+    background: #1e2228;
+    padding: 12px 20px;
+    text-align: center;
+    border-bottom: 2px solid #2c323b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 1.2rem; color: #fcc419; letter-spacing: 1px; }
+  .badge { background: #2b303a; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; color: #adb5bd; }
+
+  /* Mode Selection */
+  #mode-select {
+    margin-top: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 90%;
+    max-width: 420px;
+    text-align: center;
+  }
+  .card-btn {
+    background: #1e2228;
+    border: 2px solid #343a40;
+    border-radius: 16px;
+    padding: 24px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .card-btn:hover, .card-btn:active { border-color: #fcc419; background: #252a32; transform: translateY(-2px); }
+  .card-btn h2 { font-size: 1.3rem; margin-bottom: 8px; color: #fcc419; }
+  .card-btn p { font-size: 0.9rem; color: #adb5bd; line-height: 1.4; }
+
+  /* Host View */
+  #host-view {
+    display: none;
+    width: 100%;
+    max-width: 1100px;
+    padding: 16px;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .arena-box {
+    flex: 1 1 640px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #181b20;
+    padding: 12px;
+    border-radius: 12px;
+    border: 2px solid #2c323b;
+  }
+  canvas {
+    background: #0d0f12;
+    border: 3px solid #495057;
+    border-radius: 6px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+  .sidebar {
+    flex: 1 1 320px;
+    background: #1e2228;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid #2c323b;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 680px;
+    overflow-y: auto;
+  }
+  .btn {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: opacity 0.2s;
+  }
+  .btn:active { opacity: 0.8; }
+  .btn-primary { background: #fcc419; color: #121417; }
+  .btn-success { background: #40c057; color: #fff; }
+  .btn-info { background: #339af0; color: #fff; }
+  .btn-danger { background: #fa5252; color: #fff; }
+  .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+
+  .player-slot {
+    background: #14171c;
+    border: 1px solid #343a40;
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .slot-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+  .color-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  textarea {
+    width: 100%;
+    height: 54px;
+    background: #0d0f12;
+    border: 1px solid #495057;
+    border-radius: 6px;
+    color: #ced4da;
+    font-size: 0.72rem;
+    padding: 6px;
+    resize: none;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Controller View */
+  #ctrl-view {
+    display: none;
+    width: 100%;
+    max-width: 500px;
+    padding: 16px;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel {
+    background: #1e2228;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #343a40;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #gamepad-ui {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #121417;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 16px;
+    z-index: 100;
+  }
+  .gp-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1e2228;
+    padding: 10px 16px;
+    border-radius: 12px;
+  }
+  .gp-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex: 1;
+    padding: 10px;
+  }
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 68px);
+    grid-template-rows: repeat(3, 68px);
+    gap: 6px;
+  }
+  .dpad-btn {
+    background: #2b303a;
+    border: 2px solid #495057;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+  }
+  .dpad-btn.active { background: #fcc419; color: #121417; border-color: #fff; }
+  .fire-btn {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #fa5252;
+    border: 5px solid #ff8787;
+    color: #fff;
+    font-size: 1.3rem;
+    font-weight: bold;
+    box-shadow: 0 6px 20px rgba(250, 82, 82, 0.4);
+    touch-action: none;
+  }
+  .fire-btn:active, .fire-btn.active { background: #c92a2a; transform: scale(0.94); }
+  .status-txt { font-size: 0.85rem; color: #adb5bd; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TANK ARENA 2000</h1>
+  <span class="badge" id="global-mode">เลือกโหมดเริ่มต้น</span>
+</header>
+
+<!-- 1. เลือกโหมด -->
+<div id="mode-select">
+  <div class="card-btn" onclick="startHost()">
+    <h2>📺 เปิดสนามรบ (Host / TV)</h2>
+    <p>เปิดหน้านี้บนหน้าจอหลัก (ทีวีหรือคอมพิวเตอร์) เพื่อสร้างสนามรบและเปิดช่องให้ผู้เล่นหลายคนเชื่อมต่อเข้ามา</p>
+  </div>
+  <div class="card-btn" onclick="startController()">
+    <h2>🎮 เป็นจอยบังคับ (Controller)</h2>
+    <p>เปิดหน้านี้บนมือถือหรือแท็บอื่น เพื่อนำรหัสจากสนามรบมาเชื่อมต่อและบังคับรถถังของคุณ</p>
+  </div>
+</div>
+
+<!-- 2. หน้าจอสนามรบ (Host) -->
+<div id="host-view">
+  <div class="arena-box">
+    <canvas id="gameCanvas" width="624" height="624"></canvas>
+    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; width:100%; justify-content:space-between;">
+      <span class="status-txt">รองรับผู้เล่นหลายคนพร้อมกัน (P2P WebRTC)</span>
+      <button class="btn btn-info btn-sm" onclick="resetMap()">รีเซ็ตกำแพงแผนที่</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>ผู้เล่นในสนาม (<span id="player-count">0</span>)</strong>
+      <button class="btn btn-primary btn-sm" onclick="addPlayerSlot()">+ เพิ่มช่องผู้เล่น</button>
+    </div>
+    <p class="status-txt">กด "+ เพิ่มช่องผู้เล่น" แล้วส่งรหัส Offer ให้จอยสติ๊กแต่ละเครื่อง</p>
+    <div id="slots-container" style="display:flex; flex-direction:column; gap:12px;"></div>
+  </div>
+</div>
+
+<!-- 3. หน้าจอเชื่อมต่อจอยสติ๊ก (Controller Setup) -->
+<div id="ctrl-view">
+  <div class="panel">
+    <strong>ขั้นตอนที่ 1: วางรหัสเชิญ (Offer) จากหน้าจอสนามรบ</strong>
+    <textarea id="ctrl-offer-in" placeholder="วางรหัส Offer ที่คัดลอกมาจากหน้าจอหลักที่นี่..."></textarea>
+    <button class="btn btn-primary" onclick="acceptOffer()">สร้างรหัสตอบกลับ (Answer)</button>
+  </div>
+
+  <div class="panel" id="ctrl-answer-box" style="display:none;">
+    <strong>ขั้นตอนที่ 2: คัดลอกรหัสนี้กลับไปวางที่หน้าจอสนามรบ</strong>
+    <textarea id="ctrl-answer-out" readonly></textarea>
+    <button class="btn btn-success" onclick="copyText('ctrl-answer-out')">คัดลอกรหัสตอบกลับ</button>
+    <span class="status-txt" id="ctrl-status">กำลังรอหน้าจอสนามรบกดยืนยัน...</span>
+  </div>
+</div>
+
+<!-- 4. หน้าจอจอยสติ๊กเต็มจอเมื่อต่อติด -->
+<div id="gamepad-ui">
+  <div class="gp-top">
+    <span id="gp-player-label" style="font-weight:bold; color:#fcc419;">รถถังของคุณเชื่อมต่อแล้ว!</span>
+    <span class="badge" style="background:#2b8a3e; color:#fff;">P2P CONNECTED</span>
+  </div>
+  <div class="gp-controls">
+    <div class="dpad">
+      <div></div>
+      <button class="dpad-btn" data-dir="up">▲</button>
+      <div></div>
+      <button class="dpad-btn" data-dir="left">◀</button>
+      <div style="background:#1e2228; border-radius:10px;"></div>
+      <button class="dpad-btn" data-dir="right">▶</button>
+      <div></div>
+      <button class="dpad-btn" data-dir="down">▼</button>
+      <div></div>
+    </div>
+    <button class="fire-btn" id="btn-fire">FIRE</button>
+  </div>
+  <div style="text-align:center; font-size:0.8rem; color:#868e96;">
+    ใช้ปุ่มบนหน้าจอ หรือกดปุ่มลูกศร + Spacebar บนคีย์บอร์ดได้
+  </div>
+</div>
+
+<script>
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const COLORS = ['#40c057', '#fa5252', '#339af0', '#fcc419', '#be4bdb', '#20c997'];
+const SPAWNS = [
+  { x: 48, y: 48, dir: 'down' },
+  { x: 528, y: 48, dir: 'down' },
+  { x: 48, y: 528, dir: 'up' },
+  { x: 528, y: 528, dir: 'up' },
+  { x: 288, y: 48, dir: 'down' },
+  { x: 288, y: 528, dir: 'up' }
+];
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  el.select();
+  document.execCommand('copy');
+}
+
+/* ================= HOST / GAME ENGINE ================= */
+let slots = {};
+let slotCounter = 0;
+const TILE = 48; // 13x13 grid = 624x624
+let mapGrid = [];
+let tanks = {};
+let bullets = [];
+
+function startHost() {
+  document.getElementById('mode-select').style.display = 'none';
+  document.getElementById('host-view').style.display = 'flex';
+  document.getElementById('global-mode').innerText = 'โหมดสนามรบ (HOST)';
+  resetMap();
+  addPlayerSlot();
+  requestAnimationFrame(gameLoop);
+}
+
+function resetMap() {
+  // 0 = empty, 1 = brick (destructible), 2 = steel (indestructible)
+  mapGrid = [
+    [0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,0,1,0,1,0,1,0,1,0,1,0],
+    [0,1,0,1,0,1,2,1,0,1,0,1,0],
+    [0,1,0,1,0,0,0,0,0,1,0,1,0],
+    [0,0,0,0,0,1,1,1,0,0,0,0,0],
+    [1,1,0,2,0,1,0,1,0,2,0,1,1],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,0,2,0,1,0,1,0,2,0,1,1],
+    [0,0,0,0,0,1,1,1,0,0,0,0,0],
+    [0,1,0,1,0,0,0,0,0,1,0,1,0],
+    [0,1,0,1,0,1,2,1,0,1,0,1,0],
+    [0,1,0,1,0,1,0,1,0,1,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0]
+  ];
+}
+
+async function addPlayerSlot() {
+  slotCounter++;
+  const pid = 'P' + slotCounter;
+  const color = COLORS[(slotCounter - 1) % COLORS.length];
+  const spawn = SPAWNS[(slotCounter - 1) % SPAWNS.length];
+
+  const pc = new RTCPeerConnection(rtcConfig);
+  const dc = pc.createDataChannel('tankCtrl', { ordered: false, maxRetransmits: 0 });
+
+  slots[pid] = { pc, dc, color, spawn, connected: false };
+
+  const container = document.getElementById('slots-container');
+  const div = document.createElement('div');
+  div.className = 'player-slot';
+  div.id = 'slot-' + pid;
+  div.innerHTML = `
+    <div class="slot-header">
+      <span><i class="color-dot" style="background:${color}"></i>ผู้เล่น ${pid}</span>
+      <span class="badge" id="badge-${pid}">กำลังสร้าง Offer...</span>
+    </div>
+    <textarea id="offer-${pid}" readonly placeholder="กำลังรวบรวมเครือข่าย..."></textarea>
+    <button class="btn btn-info btn-sm" onclick="copyText('offer-${pid}')">1. คัดลอก Offer ส่งให้ ${pid}</button>
+    <textarea id="ans-${pid}" placeholder="2. วางรหัส Answer จาก ${pid} ที่นี่..."></textarea>
+    <button class="btn btn-success btn-sm" onclick="confirmAnswer('${pid}')">3. ยืนยันเชื่อมต่อ ${pid}</button>
+  `;
+  container.appendChild(div);
+
+  dc.onopen = () => {
+    slots[pid].connected = true;
+    document.getElementById('badge-' + pid).innerText = 'เชื่อมต่อแล้ว!';
+    document.getElementById('badge-' + pid).style.background = '#2b8a3e';
+    document.getElementById('badge-' + pid).style.color = '#fff';
+    updatePlayerCount();
+    spawnTank(pid, color, spawn);
+  };
+
+  dc.onclose = () => {
+    delete tanks[pid];
+    updatePlayerCount();
+    document.getElementById('badge-' + pid).innerText = 'หลุดการเชื่อมต่อ';
+    document.getElementById('badge-' + pid).style.background = '#c92a2a';
+  };
+
+  dc.onmessage = (e) => {
+    const cmd = JSON.parse(e.data);
+    if (!tanks[pid]) return;
+    tanks[pid].input = cmd;
+    if (cmd.fire) fireBullet(pid);
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') resolve();
+    else pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete') resolve();
+    };
+  });
+
+  document.getElementById('offer-' + pid).value = btoa(JSON.stringify(pc.localDescription));
+  document.getElementById('badge-' + pid).innerText = 'รอจอยเชื่อมต่อ';
+}
+
+async function confirmAnswer(pid) {
+  try {
+    const raw = document.getElementById('ans-' + pid).value.trim();
+    const desc = JSON.parse(atob(raw));
+    await slots[pid].pc.setRemoteDescription(desc);
+  } catch (err) {
+    alert('รหัส Answer ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+  }
+}
+
+function updatePlayerCount() {
+  document.getElementById('player-count').innerText = Object.keys(tanks).length;
+}
+
+function spawnTank(pid, color, spawn) {
+  tanks[pid] = {
+    id: pid,
+    x: spawn.x,
+    y: spawn.y,
+    size: 36,
+    dir: spawn.dir,
+    color: color,
+    speed: 3,
+    cooldown: 0,
+    score: 0,
+    input: { up: false, down: false, left: false, right: false }
+  };
+}
+
+function fireBullet(pid) {
+  const t = tanks[pid];
+  if (!t || t.cooldown > 0) return;
+  t.cooldown = 25;
+  let bx = t.x + t.size / 2 - 4;
+  let by = t.y + t.size / 2 - 4;
+  let vx = 0, vy = 0;
+  const bSpeed = 7;
+  if (t.dir === 'up') { vy = -bSpeed; by -= 20; }
+  if (t.dir === 'down') { vy = bSpeed; by += 20; }
+  if (t.dir === 'left') { vx = -bSpeed; bx -= 20; }
+  if (t.dir === 'right') { vx = bSpeed; bx += 20; }
+  bullets.push({ owner: pid, x: bx, y: by, vx, vy, size: 8, color: t.color });
+}
+
+function rectIntersect(r1, r2) {
+  return !(r2.x >= r1.x + r1.size || r2.x + r2.size <= r1.x || r2.y >= r1.y + r1.size || r2.y + r2.size <= r1.y);
+}
+
+function collidesWithMap(rect) {
+  if (rect.x < 0 || rect.y < 0 || rect.x + rect.size > 624 || rect.y + rect.size > 624) return true;
+  const c1 = Math.floor(rect.x / TILE);
+  const r1 = Math.floor(rect.y / TILE);
+  const c2 = Math.floor((rect.x + rect.size - 1) / TILE);
+  const r2 = Math.floor((rect.y + rect.size - 1) / TILE);
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      if (mapGrid[r] && mapGrid[r][c] > 0) return true;
+    }
+  }
+  return false;
+}
+
+function gameLoop() {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw Grid / Map
+  for (let r = 0; r < 13; r++) {
+    for (let c = 0; c < 13; c++) {
+      const cell = mapGrid[r][c];
+      if (cell === 1) {
+        ctx.fillStyle = '#d9480f';
+        ctx.fillRect(c * TILE + 1, r * TILE + 1, TILE - 2, TILE - 2);
+        ctx.strokeStyle = '#ffa94d';
+        ctx.strokeRect(c * TILE + 4, r * TILE + 4, TILE - 8, TILE - 8);
+      } else if (cell === 2) {
+        ctx.fillStyle = '#868e96';
+        ctx.fillRect(c * TILE + 1, r * TILE + 1, TILE - 2, TILE - 2);
+        ctx.fillStyle = '#dee2e6';
+        ctx.fillRect(c * TILE + 10, r * TILE + 10, TILE - 20, TILE - 20);
+      }
+    }
+  }
+
+  // Update & Draw Tanks
+  for (const pid in tanks) {
+    const t = tanks[pid];
+    if (t.cooldown > 0) t.cooldown--;
+    let nx = t.x, ny = t.y;
+    if (t.input.up) { ny -= t.speed; t.dir = 'up'; }
+    else if (t.input.down) { ny += t.speed; t.dir = 'down'; }
+    else if (t.input.left) { nx -= t.speed; t.dir = 'left'; }
+    else if (t.input.right) { nx += t.speed; t.dir = 'right'; }
+
+    if (!collidesWithMap({ x: nx, y: ny, size: t.size })) {
+      t.x = nx;
+      t.y = ny;
+    }
+
+    // Tank Body
+    ctx.fillStyle = t.color;
+    ctx.fillRect(t.x, t.y, t.size, t.size);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(t.x + 2, t.y + 2, t.size - 4, t.size - 4);
+
+    // Turret Barrel
+    ctx.fillStyle = '#f8f9fa';
+    const cx = t.x + t.size / 2;
+    const cy = t.y + t.size / 2;
+    if (t.dir === 'up') ctx.fillRect(cx - 4, t.y - 8, 8, 22);
+    if (t.dir === 'down') ctx.fillRect(cx - 4, cy, 8, 22);
+    if (t.dir === 'left') ctx.fillRect(t.x - 8, cy - 4, 22, 8);
+    if (t.dir === 'right') ctx.fillRect(cx, cy - 4, 22, 8);
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`${pid} (${t.score})`, t.x, t.y - 6);
+  }
+
+  // Update & Draw Bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+
+    // Wall collision
+    if (b.x < 0 || b.y < 0 || b.x > 624 || b.y > 624) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    const c = Math.floor((b.x + 4) / TILE);
+    const r = Math.floor((b.y + 4) / TILE);
+    if (mapGrid[r] && mapGrid[r][c] > 0) {
+      if (mapGrid[r][c] === 1) mapGrid[r][c] = 0; // Destroy brick
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    // Tank hit detection
+    let hit = false;
+    for (const pid in tanks) {
+      if (pid === b.owner) continue;
+      if (rectIntersect(b, tanks[pid])) {
+        if (tanks[b.owner]) tanks[b.owner].score++;
+        const sp = slots[pid].spawn;
+        tanks[pid].x = sp.x;
+        tanks[pid].y = sp.y;
+        hit = true;
+        break;
+      }
+    }
+    if (hit) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(b.x, b.y, b.size, b.size);
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+/* ================= CONTROLLER (CLIENT) ================= */
+let ctrlPc = null;
+let ctrlDc = null;
+const ctrlState = { up: false, down: false, left: false, right: false, fire: false };
+
+function startController() {
+  document.getElementById('mode-select').style.display = 'none';
+  document.getElementById('ctrl-view').style.display = 'flex';
+  document.getElementById('global-mode').innerText = 'โหมดจอยสติ๊ก (CONTROLLER)';
+}
+
+async function acceptOffer() {
+  try {
+    const raw = document.getElementById('ctrl-offer-in').value.trim();
+    const offerDesc = JSON.parse(atob(raw));
+
+    ctrlPc = new RTCPeerConnection(rtcConfig);
+    ctrlPc.ondatachannel = (e) => {
+      ctrlDc = e.channel;
+      ctrlDc.onopen = () => {
+        document.getElementById('gamepad-ui').style.display = 'flex';
+        setupGamepadInputs();
+      };
+    };
+
+    await ctrlPc.setRemoteDescription(offerDesc);
+    const answer = await ctrlPc.createAnswer();
+    await ctrlPc.setLocalDescription(answer);
+
+    await new Promise(resolve => {
+      if (ctrlPc.iceGatheringState === 'complete') resolve();
+      else ctrlPc.onicegatheringstatechange = () => {
+        if (ctrlPc.iceGatheringState === 'complete') resolve();
+      };
+    });
+
+    document.getElementById('ctrl-answer-out').value = btoa(JSON.stringify(ctrlPc.localDescription));
+    document.getElementById('ctrl-answer-box').style.display = 'flex';
+  } catch (err) {
+    alert('รหัส Offer ไม่ถูกต้อง กรุณาคัดลอกมาวางใหม่');
+  }
+}
+
+function sendCtrlState() {
+  if (ctrlDc && ctrlDc.readyState === 'open') {
+    ctrlDc.send(JSON.stringify(ctrlState));
+  }
+}
+
+function setupGamepadInputs() {
+  document.querySelectorAll('.dpad-btn').forEach(btn => {
+    const dir = btn.dataset.dir;
+    const press = (e) => { e.preventDefault(); ctrlState[dir] = true; btn.classList.add('active'); sendCtrlState(); };
+    const release = (e) => { e.preventDefault(); ctrlState[dir] = false; btn.classList.remove('active'); sendCtrlState(); };
+    btn.addEventListener('touchstart', press);
+    btn.addEventListener('touchend', release);
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+  });
+
+  const fireBtn = document.getElementById('btn-fire');
+  const firePress = (e) => { e.preventDefault(); ctrlState.fire = true; fireBtn.classList.add('active'); sendCtrlState(); ctrlState.fire = false; };
+  const fireRelease = (e) => { e.preventDefault(); fireBtn.classList.remove('active'); };
+  fireBtn.addEventListener('touchstart', firePress);
+  fireBtn.addEventListener('touchend', fireRelease);
+  fireBtn.addEventListener('mousedown', firePress);
+  fireBtn.addEventListener('mouseup', fireRelease);
+
+  // Keyboard support
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.key === 'ArrowUp' || e.key === 'w') ctrlState.up = true;
+    if (e.key === 'ArrowDown' || e.key === 's') ctrlState.down = true;
+    if (e.key === 'ArrowLeft' || e.key === 'a') ctrlState.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') ctrlState.right = true;
+    if (e.key === ' ') { ctrlState.fire = true; sendCtrlState(); ctrlState.fire = false; return; }
+    sendCtrlState();
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowUp' || e.key === 'w') ctrlState.up = false;
+    if (e.key === 'ArrowDown' || e.key === 's') ctrlState.down = false;
+    if (e.key === 'ArrowLeft' || e.key === 'a') ctrlState.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') ctrlState.right = false;
+    sendCtrlState();
+  });
+}
+</script>
+</body>
+</html>

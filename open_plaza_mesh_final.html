@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenPlaza Mesh Final - Decentralized P2P Hub</title>
+    <style>
+        :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --blue: #1f6feb; --green: #238636; --purple: #8957e5; --orange: #d29922; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 12px; max-width: 880px; margin: auto; }
+        .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border); }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; background: #1f2937; color: #58a6ff; border: 1px solid var(--border); }
+        .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+        .tab-btn { flex: 1; padding: 12px; background: #21262d; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; position: relative; transition: 0.2s; }
+        .tab-btn.active { background: var(--blue); color: #fff; border-color: #388bfd; }
+        .dot { height: 9px; width: 9px; background-color: #f85149; border-radius: 50%; display: none; position: absolute; top: 8px; right: 8px; }
+        input, textarea, button { padding: 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; box-sizing: border-box; }
+        input, textarea { background: var(--bg); color: #fff; width: 100%; }
+        button { background: var(--green); color: #fff; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-blue { background: var(--blue); }
+        .btn-purple { background: var(--purple); }
+        .btn-orange { background: var(--orange); color: #000; }
+        .btn-gray { background: var(--border); }
+        .row { display: flex; gap: 8px; align-items: center; }
+        #chatBox { height: 260px; overflow-y: auto; background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-top: 10px; }
+        .msg { margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; background: var(--card); font-size: 14px; word-wrap: break-word; line-height: 1.4; }
+        .sys { color: var(--muted); font-size: 12px; font-style: italic; }
+        .p2p { border-left: 4px solid #2ea043; }
+        .mqtt { border-left: 4px solid var(--orange); }
+        .sync { border-left: 4px solid var(--purple); }
+        #qrBox { background: #fff; padding: 8px; border-radius: 8px; display: inline-block; text-align: center; }
+        #videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+        video, img.iot-cam { width: 100%; border-radius: 8px; background: #000; border: 1px solid var(--border); }
+        .file-item { display: flex; justify-content: space-between; align-items: center; background: var(--bg); padding: 10px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border); font-size: 13px; gap: 10px; }
+        .progress-wrap { width: 100%; background: #21262d; border-radius: 8px; height: 10px; margin-top: 8px; overflow: hidden; display: none; }
+        .progress-bar { height: 100%; background: #2ea043; width: 0%; transition: width 0.15s; }
+    </style>
+</head>
+<body>
+
+    <div class="card top-bar">
+        <div style="flex:1; min-width:240px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                <h2 style="margin:0; font-size:18px;">🌐 OpenPlaza Mesh Final</h2>
+                <span class="badge" id="roomBadge">🌐 จัตุรัสกลาง</span>
+                <button class="btn-gray" id="soundBtn" onclick="toggleSound()" style="padding:4px 10px; font-size:12px;">🔔 เสียง: เปิด</button>
+            </div>
+            <div class="row" style="margin-bottom:8px; max-width:340px;">
+                <input type="text" id="nickInput" placeholder="ตั้งชื่อเล่นของคุณ..." style="padding:6px 10px; font-size:13px;">
+                <button class="btn-blue" onclick="saveNickname()" style="padding:6px 12px; font-size:12px; white-space:nowrap;">บันทึกชื่อ</button>
+            </div>
+            <div class="row" style="flex-wrap:wrap; margin-bottom:8px;">
+                <span class="badge" id="peerBadge">โหนด: 1</span>
+                <span class="badge" id="ramBadge">RAM ห้อง: 0/50 MB</span>
+                <span class="badge" id="statusBadge" style="color:#3fb950;">พร้อมใช้งาน (Offline/Local)</span>
+            </div>
+            <div class="row" style="flex-wrap:wrap;">
+                <button class="btn-purple" onclick="switchPrivateRoom()" style="padding:7px 12px; font-size:12px;">🔒 แยกห้องลับ</button>
+                <button class="btn-gray" onclick="switchPublicPlaza()" style="padding:7px 12px; font-size:12px;">🌐 จัตุรัสกลาง</button>
+                <button class="btn-blue" onclick="copyRoomLink()" style="padding:7px 12px; font-size:12px;">🔗 คัดลอกลิงก์</button>
+            </div>
+        </div>
+        <div id="qrBox">
+            <canvas id="qrCanvas" width="84" height="84"></canvas>
+            <div style="color:#000; font-size:10px; font-weight:bold; margin-top:2px;">ROOM ID</div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tabBtn-chat" onclick="switchTab('chat')">💬 แชท & ปักหมุด</button>
+        <button class="tab-btn" id="tabBtn-files" onclick="switchTab('files')">📁 คลังไฟล์ & คิว <span class="dot" id="dot-files"></span></button>
+        <button class="tab-btn" id="tabBtn-media" onclick="switchTab('media')">🎥 วิดีโอ & กล้อง IoT <span class="dot" id="dot-media"></span></button>
+    </div>
+
+    <div id="tab-chat" class="card">
+        <div style="background:#1c2128; padding:10px; border-radius:8px; border:1px dashed #388bfd; margin-bottom:10px;">
+            <div style="font-size:13px; color:#58a6ff; font-weight:bold; margin-bottom:4px;">📌 กระดานปักหมุดส่วนกลาง (จำใน RAM ส่งต่ออัตโนมัติ)</div>
+            <textarea id="pinText" rows="2" placeholder="พิมพ์ประกาศสำคัญ ลิงก์ หรือโน้ตประจำห้อง..."></textarea>
+            <button class="btn-blue" onclick="updatePin()" style="width:100%; margin-top:6px; padding:7px; font-size:13px;">อัปเดตปักหมุดให้ทุกคน</button>
+        </div>
+        <div id="chatBox"></div>
+        <div class="row" style="margin-top:8px;">
+            <input type="text" id="msgInput" placeholder="พิมพ์ข้อความ หรือคำสั่ง IoT (ON, OFF, SNAP)..." onkeypress="if(event.key==='Enter') sendChat()">
+            <button onclick="sendChat()" style="width:90px;">ส่ง</button>
+        </div>
+    </div>
+
+    <div id="tab-files" class="card" style="display:none;">
+        <div style="background:#1c2128; padding:10px; border-radius:8px; margin-bottom:10px; font-size:13px;">
+            <strong>⚡ กติกาคิวอัจฉริยะ (Fair Share & Hybrid):</strong><br>
+            • ไฟล์ &lt; 20 MB: ฝากใน RAM ห้อง (จำกัดคนละไม่เกิน 3 ไฟล์ / 15 MB เพื่อแบ่งปันพื้นที่)<br>
+            • ไฟล์ &ge; 20 MB: ส่งตรง P2P Stream ไม่จำกัดขนาด (ไม่กิน RAM ห้อง)
+        </div>
+        <div class="row">
+            <input type="file" id="fileInput">
+            <button class="btn-orange" onclick="handleFileUpload()" style="width:150px;">โยนไฟล์เข้าคิว</button>
+        </div>
+        <div id="queueStatus" class="sys" style="margin-top:8px; color:#58a6ff;"></div>
+        <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+        <div id="fileList"></div>
+    </div>
+
+    <div id="tab-media" class="card" style="display:none;">
+        <div class="row" style="flex-wrap:wrap; margin-bottom:8px;">
+            <button onclick="toggleMedia('camera')" style="flex:1;">📷 เปิด/ปิด กล้อง</button>
+            <button class="btn-purple" onclick="toggleMedia('screen')" style="flex:1;">🖥️ แชร์/หยุด หน้าจอ</button>
+        </div>
+        <div class="row" style="flex-wrap:wrap;">
+            <button class="btn-orange" onclick="sendIoT('SNAP')" style="flex:1; font-size:13px;">📸 ถ่ายภาพ IoT</button>
+            <button class="btn-orange" onclick="sendIoT('STREAM_ON')" style="flex:1; font-size:13px;">▶️ ภาพสด IoT</button>
+            <button class="btn-gray" onclick="sendIoT('STREAM_OFF')" style="flex:1; font-size:13px;">⏹️ หยุดภาพ IoT</button>
+        </div>
+        <div id="videoGrid">
+            <img id="iotCamImg" class="iot-cam" style="display:none;" alt="IoT Camera">
+        </div>
+    </div>
+
+    <script>
+        const PUBLIC_ROOM = 'Global-Public-Plaza';
+        const MAX_NEIGHBORS = 6;
+        const MAX_ROOM_RAM = 50 * 1024 * 1024;
+        const MAX_PER_PEER_RAM = 15 * 1024 * 1024;
+        const MAX_PER_PEER_FILES = 3;
+        const TTL_MS = 30 * 60 * 1000;
+
+        let currentRoom = PUBLIC_ROOM;
+        let myPeerId = 'node-' + Math.random().toString(36).substr(2, 6);
+        let myNickname = localStorage.getItem('openplaza_nick') || myPeerId;
+        let soundEnabled = true;
+
+        let peer = null, mqttClient = null, localStream = null, mediaMode = null;
+        let connections = {};
+        let knownPeers = new Set([myPeerId]);
+        let brokerIdx = 0;
+        const brokers = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+
+        let state = { pin: { text: '', ts: 0 }, messages: [], files: {} };
+        let seenIds = new Set();
+        let rateLimits = {};
+        let blockedPeers = new Set();
+
+        let downloadQueue = [];
+        let isDownloading = false;
+        let incomingBuffers = {};
+        let localRawFiles = {};
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+            });
+        }
+
+        function drawVisualBadge(text) {
+            const canvas = document.getElementById('qrCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 84, 84);
+            ctx.fillStyle = '#0d1117';
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash) + text.charCodeAt(i);
+            const size = 7;
+            const cell = 84 / size;
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    if ((r < 2 && c < 2) || (r < 2 && c > size - 3) || (r > size - 3 && c < 2) || ((Math.abs(hash + r * 13 + c * 7) % 2) === 0)) {
+                        ctx.fillRect(c * cell + 2, r * cell + 2, cell - 3, cell - 3);
+                    }
+                }
+            }
+        }
+
+        function playBeep() {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundBtn').innerText = soundEnabled ? '🔔 เสียง: เปิด' : '🔕 เสียง: ปิด';
+        }
+
+        function saveNickname() {
+            const val = document.getElementById('nickInput').value.trim();
+            if (!val) return;
+            myNickname = val;
+            localStorage.setItem('openplaza_nick', val);
+            addChat(`เปลี่ยนชื่อเรียกของคุณเป็น <b>${myNickname}</b> แล้ว`, 'sys');
+        }
+
+        window.onload = async () => {
+            document.getElementById('nickInput').value = myNickname;
+            const params = new URLSearchParams(window.location.search);
+            const r = params.get('room');
+            if (r) currentRoom = r;
+
+            try {
+                await Promise.all([
+                    loadScript('https://unpkg.com/mqtt/dist/mqtt.min.js'),
+                    loadScript('https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js')
+                ]);
+                initRoom();
+            } catch (e) {
+                document.getElementById('statusBadge').innerText = 'โหมดออฟไลน์ (Offline Local)';
+                drawVisualBadge(currentRoom);
+                addChat('ระบบทำงานในโหมดออฟไลน์ภายในเครื่อง (Offline Ready)', 'sys');
+            }
+            setInterval(cleanExpired, 30000);
+        };
+
+        function initRoom() {
+            for (let id in connections) connections[id].close();
+            connections = {};
+            knownPeers = new Set([myPeerId]);
+            state = { pin: { text: '', ts: 0 }, messages: [], files: {} };
+            seenIds.clear();
+            document.getElementById('chatBox').innerHTML = '';
+            document.getElementById('pinText').value = '';
+            renderFiles();
+
+            const isPub = (currentRoom === PUBLIC_ROOM);
+            document.getElementById('roomBadge').innerText = isPub ? '🌐 จัตุรัสกลาง' : `🔒 ห้อง: ${currentRoom}`;
+            drawVisualBadge(currentRoom);
+
+            if (!peer && window.Peer) {
+                peer = new Peer(myPeerId, {
+                    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }] }
+                });
+                peer.on('open', () => connectMQTT());
+                peer.on('connection', conn => bindConn(conn));
+                peer.on('call', call => {
+                    call.answer(localStream);
+                    call.on('stream', s => { showVideo(call.peer, s); notifyTab('media'); });
+                });
+            } else if (window.mqtt) {
+                connectMQTT();
+            }
+        }
+
+        function switchPrivateRoom() {
+            const name = prompt('ตั้งชื่อห้องลับส่วนตัวของคุณ:', 'priv-' + Math.random().toString(36).substr(2, 5));
+            if (name && name.trim()) {
+                currentRoom = name.trim();
+                window.history.replaceState({}, '', `?room=${encodeURIComponent(currentRoom)}`);
+                initRoom();
+            }
+        }
+
+        function switchPublicPlaza() {
+            currentRoom = PUBLIC_ROOM;
+            window.history.replaceState({}, '', window.location.pathname);
+            initRoom();
+        }
+
+        function copyRoomLink() {
+            const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(currentRoom)}`;
+            if (navigator.clipboard) navigator.clipboard.writeText(url);
+            alert('คัดลอกลิงก์ห้องแล้ว:
+' + url);
+        }
+
+        function switchTab(t) {
+            ['chat', 'files', 'media'].forEach(name => {
+                document.getElementById('tab-' + name).style.display = (name === t) ? 'block' : 'none';
+                document.getElementById('tabBtn-' + name).classList.toggle('active', name === t);
+            });
+            const dot = document.getElementById('dot-' + t);
+            if (dot) dot.style.display = 'none';
+        }
+
+        function notifyTab(t) {
+            if (document.getElementById('tab-' + t).style.display === 'none') {
+                document.getElementById('dot-' + t).style.display = 'inline-block';
+            }
+        }
+
+        function connectMQTT() {
+            if (mqttClient) mqttClient.end();
+            const topicData = `openplaza-final/${currentRoom}/data`;
+            const topicCam = `openplaza-final/${currentRoom}/cam`;
+            document.getElementById('statusBadge').innerText = 'กำลังเชื่อมต่อ...';
+
+            mqttClient = mqtt.connect(brokers[brokerIdx], { connectTimeout: 4000 });
+            mqttClient.on('connect', () => {
+                document.getElementById('statusBadge').innerText = 'ออนไลน์ (P2P Mesh)';
+                mqttClient.subscribe([topicData, topicCam]);
+                mqttClient.publish(topicData, JSON.stringify({ type: 'HELLO', peerId: myPeerId }));
+                addChat(`เข้าสู่ห้อง <b>${currentRoom}</b> สำเร็จ`, 'sys');
+            });
+
+            mqttClient.on('error', () => {
+                mqttClient.end();
+                brokerIdx = (brokerIdx + 1) % brokers.length;
+                setTimeout(connectMQTT, 1000);
+            });
+
+            mqttClient.on('message', (topic, msg) => {
+                const raw = msg.toString();
+                if (topic === topicCam && raw.startsWith('data:image/')) {
+                    const img = document.getElementById('iotCamImg');
+                    img.src = raw;
+                    img.style.display = 'block';
+                    notifyTab('media');
+                    return;
+                }
+                try {
+                    const d = JSON.parse(raw);
+                    if (d.type === 'HELLO' && d.peerId !== myPeerId && !blockedPeers.has(d.peerId)) {
+                        knownPeers.add(d.peerId);
+                        updateBadges();
+                        if (!connections[d.peerId] && Object.keys(connections).length < MAX_NEIGHBORS) {
+                            bindConn(peer.connect(d.peerId, { reliable: true }));
+                        }
+                    } else if (d.type === 'IOT_DATA') {
+                        processIncomingMsg({ id: 'iot-' + Date.now(), sender: '🤖 IoT', text: d.payload, ts: Date.now(), style: 'mqtt' }, false);
+                    }
+                } catch (e) {}
+            });
+        }
+
+        function checkSpam(peerId) {
+            const now = Date.now();
+            if (!rateLimits[peerId]) rateLimits[peerId] = { last: 0, strikes: 0 };
+            if (now - rateLimits[peerId].last < 700) {
+                rateLimits[peerId].strikes++;
+                if (rateLimits[peerId].strikes >= 5) {
+                    blockedPeers.add(peerId);
+                    if (connections[peerId]) connections[peerId].close();
+                    addChat(`🛡️ บล็อกโหนด <b>${peerId}</b> อัตโนมัติเนื่องจากส่งข้อมูลถี่เกินไป`, 'sys');
+                    return true;
+                }
+            } else {
+                rateLimits[peerId].strikes = Math.max(0, rateLimits[peerId].strikes - 1);
+            }
+            rateLimits[peerId].last = now;
+            return false;
+        }
+
+        function bindConn(conn) {
+            if (blockedPeers.has(conn.peer)) return conn.close();
+            conn.on('open', () => {
+                connections[conn.peer] = conn;
+                knownPeers.add(conn.peer);
+                updateBadges();
+
+                const fileMetas = {};
+                for (let fId in state.files) {
+                    const f = state.files[fId];
+                    fileMetas[fId] = { id: f.id, name: f.name, size: f.size, ts: f.ts, owner: f.owner, ownerName: f.ownerName, isStreamOnly: f.isStreamOnly, seeders: Array.from(f.seeders) };
+                }
+                conn.send({ type: 'SYNC_ALL', pin: state.pin, messages: state.messages, files: fileMetas });
+                if (localStream) peer.call(conn.peer, localStream);
+            });
+
+            conn.on('data', d => {
+                if (d.type !== 'CHUNK_DATA' && checkSpam(conn.peer)) return;
+
+                if (d.type === 'SYNC_ALL') {
+                    if (d.pin && d.pin.ts > state.pin.ts) {
+                        state.pin = d.pin;
+                        document.getElementById('pinText').value = d.pin.text;
+                    }
+                    if (d.messages) {
+                        d.messages.sort((a, b) => a.ts - b.ts).forEach(m => processIncomingMsg(m, false, 'sync'));
+                    }
+                    if (d.files) {
+                        for (let fId in d.files) {
+                            if (!state.files[fId]) {
+                                state.files[fId] = { ...d.files[fId], buffer: null, seeders: new Set(d.files[fId].seeders) };
+                            } else {
+                                d.files[fId].seeders.forEach(s => state.files[fId].seeders.add(s));
+                            }
+                        }
+                        enforceFairShare();
+                        renderFiles();
+                    }
+                }
+                else if (d.type === 'GOSSIP_MSG') {
+                    processIncomingMsg(d.msg, true);
+                    playBeep();
+                }
+                else if (d.type === 'GOSSIP_PIN') {
+                    if (d.pin.ts > state.pin.ts) {
+                        state.pin = d.pin;
+                        document.getElementById('pinText').value = d.pin.text;
+                        gossipBroadcast(d, conn.peer);
+                        playBeep();
+                    }
+                }
+                else if (d.type === 'GOSSIP_FILE') {
+                    if (!state.files[d.file.id]) {
+                        state.files[d.file.id] = { ...d.file, buffer: null, seeders: new Set(d.file.seeders) };
+                        enforceFairShare();
+                        renderFiles();
+                        notifyTab('files');
+                        playBeep();
+                        gossipBroadcast(d, conn.peer);
+                    }
+                }
+                else if (d.type === 'ADD_SEEDER') {
+                    if (state.files[d.fileId]) {
+                        state.files[d.fileId].seeders.add(d.seederId);
+                        renderFiles();
+                        gossipBroadcast(d, conn.peer);
+                    }
+                }
+                else if (d.type === 'REQ_FILE') {
+                    const f = state.files[d.fileId];
+                    if (f && f.buffer) streamBuffer(conn, d.fileId, f.name, f.size, f.buffer);
+                    else if (localRawFiles[d.fileId]) streamLocalFile(conn, d.fileId, localRawFiles[d.fileId]);
+                }
+                else if (d.type === 'CHUNK_START') {
+                    incomingBuffers[d.fileId] = { name: d.name, size: d.size, chunks: [], received: 0 };
+                    document.getElementById('progressWrap').style.display = 'block';
+                    document.getElementById('progressBar').style.width = '0%';
+                }
+                else if (d.type === 'CHUNK_DATA') {
+                    const inc = incomingBuffers[d.fileId];
+                    if (!inc) return;
+                    inc.chunks.push(d.chunk);
+                    inc.received += d.chunk.byteLength;
+                    const pct = Math.round((inc.received / inc.size) * 100);
+                    document.getElementById('queueStatus').innerText = `⬇️ กำลังโหลด: ${inc.name} (${pct}%) | รอคิว: ${downloadQueue.length} ไฟล์`;
+                    document.getElementById('progressBar').style.width = pct + '%';
+
+                    if (inc.received >= inc.size) {
+                        const blob = new Blob(inc.chunks);
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = inc.name;
+                        a.click();
+
+                        const fMeta = state.files[d.fileId];
+                        if (fMeta && !fMeta.isStreamOnly) {
+                            blob.arrayBuffer().then(buf => {
+                                if (getTotalRam() + buf.byteLength <= MAX_ROOM_RAM) {
+                                    fMeta.buffer = buf;
+                                    fMeta.seeders.add(myPeerId);
+                                    gossipBroadcast({ type: 'ADD_SEEDER', fileId: d.fileId, seederId: myPeerId });
+                                    updateBadges();
+                                    renderFiles();
+                                }
+                            });
+                        }
+                        delete incomingBuffers[d.fileId];
+                        isDownloading = false;
+                        document.getElementById('progressWrap').style.display = 'none';
+                        processDownloadQueue();
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                delete connections[conn.peer];
+                knownPeers.delete(conn.peer);
+                updateBadges();
+                const v = document.getElementById('vid-' + conn.peer);
+                if (v) v.remove();
+            });
+        }
+
+        function gossipBroadcast(payload, excludePeer = null) {
+            for (let id in connections) {
+                if (id !== excludePeer && connections[id].open) {
+                    connections[id].send(payload);
+                }
+            }
+        }
+
+        function processIncomingMsg(msg, shouldRelay = true, overrideStyle = null) {
+            if (seenIds.has(msg.id)) return;
+            seenIds.add(msg.id);
+            state.messages.push(msg);
+            state.messages.sort((a, b) => a.ts - b.ts);
+            if (state.messages.length > 50) state.messages.shift();
+            addChat(`<b>[${msg.sender}]:</b> ${msg.text}`, overrideStyle || msg.style || 'p2p');
+            if (shouldRelay) gossipBroadcast({ type: 'GOSSIP_MSG', msg });
+        }
+
+        function addChat(html, cls) {
+            const box = document.getElementById('chatBox');
+            const d = document.createElement('div');
+            d.className = 'msg ' + cls;
+            d.innerHTML = html;
+            box.appendChild(d);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function sendChat() {
+            const inp = document.getElementById('msgInput');
+            const txt = inp.value.trim();
+            if (!txt) return;
+            const msg = { id: myPeerId + '-' + Date.now(), sender: myNickname, text: txt, ts: Date.now(), style: 'p2p' };
+            processIncomingMsg(msg, true);
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`openplaza-final/${currentRoom}/data`, JSON.stringify({ type: 'CMD', payload: txt }));
+            }
+            inp.value = '';
+        }
+
+        function updatePin() {
+            const txt = document.getElementById('pinText').value;
+            state.pin = { text: txt, ts: Date.now() };
+            gossipBroadcast({ type: 'GOSSIP_PIN', pin: state.pin });
+            addChat('📌 อัปเดตกระดานปักหมุดเรียบร้อย', 'sync');
+        }
+
+        function sendIoT(cmd) {
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`openplaza-final/${currentRoom}/data`, JSON.stringify({ type: 'CMD', payload: cmd }));
+                addChat(`📡 ส่งคำสั่ง IoT: <b>${cmd}</b>`, 'mqtt');
+            } else {
+                addChat(`📡 บันทึกคำสั่ง (โหมดออฟไลน์): <b>${cmd}</b>`, 'mqtt');
+            }
+        }
+
+        async function handleFileUpload() {
+            const inp = document.getElementById('fileInput');
+            const file = inp.files[0];
+            if (!file) return alert('กรุณาเลือกไฟล์ก่อนครับ');
+
+            const isStreamOnly = file.size >= (20 * 1024 * 1024);
+            const fileId = 'f-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+
+            if (isStreamOnly) {
+                localRawFiles[fileId] = file;
+                state.files[fileId] = { id: fileId, name: file.name, size: file.size, ts: Date.now(), owner: myPeerId, ownerName: myNickname, isStreamOnly: true, buffer: null, seeders: new Set([myPeerId]) };
+            } else {
+                const buf = await file.arrayBuffer();
+                state.files[fileId] = { id: fileId, name: file.name, size: file.size, ts: Date.now(), owner: myPeerId, ownerName: myNickname, isStreamOnly: false, buffer: buf, seeders: new Set([myPeerId]) };
+            }
+
+            enforceFairShare();
+            updateBadges();
+            renderFiles();
+
+            const f = state.files[fileId];
+            gossipBroadcast({
+                type: 'GOSSIP_FILE',
+                file: { id: f.id, name: f.name, size: f.size, ts: f.ts, owner: f.owner, ownerName: f.ownerName, isStreamOnly: f.isStreamOnly, seeders: [myPeerId] }
+            });
+            inp.value = '';
+        }
+
+        function enforceFairShare() {
+            const byOwner = {};
+            const allFiles = Object.values(state.files).sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+            allFiles.forEach(f => {
+                if (!byOwner[f.owner]) byOwner[f.owner] = [];
+                byOwner[f.owner].push(f);
+            });
+
+            for (let owner in byOwner) {
+                let list = byOwner[owner];
+                while (list.length > MAX_PER_PEER_FILES || list.reduce((acc, x) => acc + (x.isStreamOnly ? 0 : x.size), 0) > MAX_PER_PEER_RAM) {
+                    const oldest = list.shift();
+                    delete state.files[oldest.id];
+                    delete localRawFiles[oldest.id];
+                }
+            }
+
+            const remaining = Object.values(state.files).sort((a, b) => a.ts - b.ts);
+            while (getTotalRam() > MAX_ROOM_RAM && remaining.length > 0) {
+                const oldest = remaining.shift();
+                delete state.files[oldest.id];
+            }
+        }
+
+        function renderFiles() {
+            const listEl = document.getElementById('fileList');
+            listEl.innerHTML = '';
+            const sorted = Object.values(state.files).sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+            sorted.forEach((f, idx) => {
+                const mb = (f.size / (1024 * 1024)).toFixed(2);
+                const modeTag = f.isStreamOnly ? '⚡ Direct Stream' : `🧠 RAM Vault (${f.seeders.size} ผู้ช่วย)`;
+                const inQueue = downloadQueue.includes(f.id);
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.innerHTML = `
+                    <div>
+                        <strong>#${idx + 1} ${f.name}</strong> (${mb} MB)<br>
+                        <span class="sys">โดย: ${f.ownerName || f.owner} | ${modeTag}</span>
+                    </div>
+                    <button class="btn-blue" onclick="enqueueDownload('${f.id}')" ${inQueue ? 'disabled' : ''}>
+                        ${inQueue ? '⏳ รอคิว...' : '⬇️ ดึงไฟล์'}
+                    </button>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        function enqueueDownload(fileId) {
+            const f = state.files[fileId];
+            if (!f) return;
+            if (f.buffer) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([f.buffer]));
+                a.download = f.name;
+                a.click();
+                return;
+            }
+            if (!downloadQueue.includes(fileId)) {
+                downloadQueue.push(fileId);
+                renderFiles();
+                processDownloadQueue();
+            }
+        }
+
+        function processDownloadQueue() {
+            if (isDownloading) return;
+            if (downloadQueue.length === 0) {
+                document.getElementById('queueStatus').innerText = '';
+                renderFiles();
+                return;
+            }
+            const nextId = downloadQueue.shift();
+            const f = state.files[nextId];
+            renderFiles();
+
+            if (!f) return processDownloadQueue();
+
+            const onlineSeeders = Array.from(f.seeders).filter(id => connections[id] && connections[id].open);
+            if (onlineSeeders.length === 0) {
+                alert(`ไม่พบเครื่องที่ถือไฟล์ ${f.name} ออนไลน์อยู่ครับ`);
+                return processDownloadQueue();
+            }
+
+            const chosenPeer = onlineSeeders[Math.floor(Math.random() * onlineSeeders.length)];
+            isDownloading = true;
+            document.getElementById('queueStatus').innerText = `⏳ กำลังขอไฟล์ ${f.name} จาก ${chosenPeer}...`;
+            connections[chosenPeer].send({ type: 'REQ_FILE', fileId: nextId });
+        }
+
+        async function streamBuffer(conn, fileId, name, size, buffer) {
+            const chunk = 65536;
+            conn.send({ type: 'CHUNK_START', fileId, name, size });
+            for (let off = 0; off < size; off += chunk) {
+                while (conn.dataChannel && conn.dataChannel.bufferedAmount > 1024 * 1024) {
+                    await new Promise(r => setTimeout(r, 20));
+                }
+                conn.send({ type: 'CHUNK_DATA', fileId, chunk: buffer.slice(off, off + chunk) });
+            }
+        }
+
+        async function streamLocalFile(conn, fileId, file) {
+            const chunk = 65536;
+            conn.send({ type: 'CHUNK_START', fileId, name: file.name, size: file.size });
+            for (let off = 0; off < file.size; off += chunk) {
+                while (conn.dataChannel && conn.dataChannel.bufferedAmount > 1024 * 1024) {
+                    await new Promise(r => setTimeout(r, 20));
+                }
+                const slice = await file.slice(off, off + chunk).arrayBuffer();
+                conn.send({ type: 'CHUNK_DATA', fileId, chunk: slice });
+            }
+        }
+
+        function getTotalRam() {
+            let sum = 0;
+            for (let id in state.files) if (state.files[id].buffer) sum += state.files[id].buffer.byteLength;
+            return sum;
+        }
+
+        function updateBadges() {
+            document.getElementById('peerBadge').innerText = `โหนด: ${knownPeers.size}`;
+            document.getElementById('ramBadge').innerText = `RAM ห้อง: ${(getTotalRam() / (1024 * 1024)).toFixed(1)}/50 MB`;
+        }
+
+        function cleanExpired() {
+            const now = Date.now();
+            state.messages = state.messages.filter(m => now - m.ts < TTL_MS);
+            let changed = false;
+            for (let id in state.files) {
+                if (now - state.files[id].ts >= TTL_MS) {
+                    delete state.files[id];
+                    delete localRawFiles[id];
+                    changed = true;
+                }
+            }
+            if (changed) { updateBadges(); renderFiles(); }
+        }
+
+        async function toggleMedia(mode) {
+            if (localStream && mediaMode === mode) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null; mediaMode = null;
+                const v = document.getElementById('vid-me');
+                if (v) v.remove();
+                return;
+            }
+            try {
+                if (localStream) localStream.getTracks().forEach(t => t.stop());
+                localStream = (mode === 'camera')
+                    ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                mediaMode = mode;
+                showVideo('me', localStream, true);
+                for (let id in connections) {
+                    const call = peer.call(id, localStream);
+                    call.on('stream', s => showVideo(id, s));
+                }
+            } catch (e) { alert('เปิดกล้อง/หน้าจอไม่สำเร็จ: ' + e.message); }
+        }
+
+        function showVideo(id, stream, muted = false) {
+            let v = document.getElementById('vid-' + id);
+            if (!v) {
+                v = document.createElement('video');
+                v.id = 'vid-' + id; v.autoplay = true; v.playsInline = true; v.muted = muted;
+                document.getElementById('videoGrid').appendChild(v);
+            }
+            v.srcObject = stream;
+        }
+    </script>
+</body>
+</html>
