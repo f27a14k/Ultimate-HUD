@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Windows 95 WebOS v3.0 (P2P Edition)</title>
+<style>
+  * { box-sizing: border-box; user-select: none; font-family: 'Tahoma', 'Segoe UI', sans-serif; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #008080; }
+
+  #desktop {
+    width: 100%; height: calc(100% - 42px);
+    padding: 14px; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 16px;
+    position: relative;
+  }
+
+  .icon {
+    width: 78px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    color: white; font-size: 12px; cursor: pointer; text-shadow: 1px 1px 1px #000;
+  }
+  .icon-box {
+    width: 46px; height: 46px; background: rgba(255,255,255,0.18); border: 2px solid #fff;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    font-size: 25px; margin-bottom: 4px; box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+  }
+  .icon:active .icon-box { transform: scale(0.92); background: rgba(0,0,128,0.5); }
+
+  .window {
+    position: absolute; top: 30px; left: 4%; width: 92%; max-width: 410px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    box-shadow: 4px 4px 12px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 10;
+  }
+  .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: white;
+    padding: 5px 8px; font-weight: bold; font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center; cursor: move; touch-action: none;
+  }
+  .title-controls { display: flex; gap: 4px; }
+  .win-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    width: 22px; height: 20px; font-weight: bold; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .win-btn:active { border-color: #404040 #fff #fff #404040; }
+  .window-body { padding: 10px; flex: 1; font-size: 13px; max-height: 75vh; overflow-y: auto; }
+
+  #taskbar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 42px;
+    background: #c0c0c0; border-top: 2px solid #fff;
+    display: flex; align-items: center; padding: 0 5px; gap: 5px; z-index: 1000;
+  }
+  #start-btn {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 4px 10px; font-weight: bold; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  }
+  #start-btn:active { border-color: #404040 #fff #fff #404040; }
+  #task-list {
+    display: flex; flex: 1; gap: 4px; overflow-x: auto; align-items: center; height: 100%;
+  }
+  .task-tab {
+    background: #d4d0c8; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 4px 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+    white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task-tab.active {
+    background: #e0e0e0; border-color: #404040 #fff #fff #404040;
+  }
+  #clock {
+    border: 2px solid; border-color: #808080 #fff #fff #808080;
+    padding: 4px 8px; font-size: 12px; background: #d4d0c8; font-weight: bold; flex-shrink: 0;
+  }
+
+  #start-menu {
+    position: fixed; bottom: 42px; left: 5px; width: 210px;
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    display: none; flex-direction: column; z-index: 999; box-shadow: 3px -3px 8px rgba(0,0,0,0.4);
+  }
+  .menu-item { padding: 9px 12px; border-bottom: 1px solid #999; cursor: pointer; font-size: 13px; }
+  .menu-item:active { background: #000080; color: white; }
+
+  .btn-95 {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer;
+  }
+  .btn-95:active { border-color: #404040 #fff #fff #404040; }
+  input[type="text"], textarea {
+    border: 2px solid; border-color: #808080 #fff #fff #808080;
+    padding: 5px; font-size: 13px; user-select: text; background: #fff;
+  }
+
+  /* P2P Chat Styles */
+  .p2p-box { background: #d4d0c8; border: 1px solid #808080; padding: 8px; margin-bottom: 8px; }
+  .p2p-code { width: 100%; height: 48px; font-size: 11px; font-family: monospace; margin: 4px 0; resize: none; }
+  #chat-log {
+    width: 100%; height: 130px; background: #fff; border: 2px inset #fff;
+    padding: 6px; overflow-y: auto; font-size: 13px; margin-bottom: 6px; user-select: text;
+  }
+  .msg-me { color: #000080; margin-bottom: 4px; }
+  .msg-peer { color: #006400; margin-bottom: 4px; }
+  .msg-sys { color: #666; font-style: italic; font-size: 12px; margin-bottom: 4px; }
+
+  /* My Documents */
+  .doc-toolbar { display: flex; gap: 5px; margin-bottom: 8px; }
+  .doc-list {
+    background: #fff; border: 2px inset #fff; height: 170px; overflow-y: auto; padding: 5px;
+  }
+  .doc-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px; border-bottom: 1px solid #eee; cursor: pointer;
+  }
+  .doc-item:active { background: #000080; color: #fff; }
+
+  /* Paint */
+  .paint-tools { display: flex; gap: 5px; margin-bottom: 6px; align-items: center; flex-wrap: wrap; }
+  .color-dot { width: 24px; height: 24px; border: 2px solid #404040; cursor: pointer; }
+  #paint-canvas { background: #fff; border: 2px inset #fff; width: 100%; height: 210px; touch-action: none; display: block; }
+
+  /* Calculator */
+  #calc-display {
+    width: 100%; height: 36px; background: #fff; border: 2px inset #fff;
+    text-align: right; font-size: 20px; padding: 4px 8px; margin-bottom: 6px;
+  }
+  .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .calc-btn { padding: 10px; font-size: 16px; font-weight: bold; }
+
+  /* Minesweeper */
+  .mine-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; background: #808080; border: 2px inset #fff; padding: 2px; }
+  .mine-cell {
+    aspect-ratio: 1; background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; cursor: pointer;
+  }
+  .mine-cell.open { border: 1px solid #999; background: #e0e0e0; }
+</style>
+</head>
+<body>
+
+<div id="desktop">
+  <div class="icon" data-open="win-p2p">
+    <div class="icon-box">💬</div>
+    <span>แชตข้ามเครื่อง</span>
+  </div>
+  <div class="icon" data-open="win-docs">
+    <div class="icon-box">📁</div>
+    <span>My Documents</span>
+  </div>
+  <div class="icon" data-open="win-note">
+    <div class="icon-box">📝</div>
+    <span>Notepad</span>
+  </div>
+  <div class="icon" data-open="win-paint">
+    <div class="icon-box">🎨</div>
+    <span>Paint</span>
+  </div>
+  <div class="icon" data-open="win-calc">
+    <div class="icon-box">🧮</div>
+    <span>Calculator</span>
+  </div>
+  <div class="icon" data-open="win-mine">
+    <div class="icon-box">💣</div>
+    <span>Minesweeper</span>
+  </div>
+</div>
+
+<!-- Window: P2P Cross-Device Chat -->
+<div class="window" id="win-p2p" data-title="💬 แชตข้ามเครื่อง (P2P)">
+  <div class="title-bar">
+    <span>💬 แชต & โยนโน้ตข้ามเครื่อง (WebRTC)</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-p2p">_</button>
+      <button class="win-btn" data-close="win-p2p">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="p2p-setup">
+      <div class="p2p-box">
+        <b>เครื่องที่ 1 (สร้างห้อง):</b>
+        <div style="margin-top:4px; display:flex; gap:4px;">
+          <button class="btn-95" id="btn-create-offer">1. สร้างรหัสห้อง</button>
+          <button class="btn-95" id="btn-copy-offer">คัดลอกรหัส</button>
+        </div>
+        <textarea id="offer-out" class="p2p-code" readonly placeholder="กดปุ่ม 1 เพื่อสร้างรหัสส่งให้เครื่องที่ 2..."></textarea>
+        <div style="display:flex; gap:4px; margin-top:4px;">
+          <input type="text" id="answer-in" style="flex:1; font-size:11px;" placeholder="วางรหัสตอบกลับจากเครื่อง 2 ที่นี่">
+          <button class="btn-95" id="btn-accept-answer">3. ยืนยันเชื่อมต่อ</button>
+        </div>
+      </div>
+
+      <div class="p2p-box">
+        <b>เครื่องที่ 2 (เข้าร่วมห้อง):</b>
+        <div style="display:flex; gap:4px; margin-top:4px;">
+          <input type="text" id="offer-in" style="flex:1; font-size:11px;" placeholder="วางรหัสจากเครื่อง 1 ที่นี่">
+          <button class="btn-95" id="btn-create-answer">2. เข้าร่วมห้อง</button>
+        </div>
+        <textarea id="answer-out" class="p2p-code" readonly placeholder="รหัสตอบกลับจะโผล่ตรงนี้ กดคัดลอกส่งคืนเครื่อง 1..."></textarea>
+        <button class="btn-95" id="btn-copy-answer">คัดลอกรหัสตอบกลับ</button>
+      </div>
+    </div>
+
+    <div id="p2p-connected" style="display:none;">
+      <div style="background:#006400; color:#fff; padding:4px 8px; font-weight:bold; margin-bottom:6px; font-size:12px;">
+        🟢 เชื่อมต่อ 2 เครื่องสำเร็จแล้ว!
+      </div>
+      <div id="chat-log"></div>
+      <div style="display:flex; gap:4px; margin-bottom:6px;">
+        <input type="text" id="chat-input" style="flex:1;" placeholder="พิมพ์ข้อความส่งข้ามเครื่อง...">
+        <button class="btn-95" id="btn-send-chat">ส่ง</button>
+      </div>
+      <button class="btn-95" id="btn-send-note" style="width:100%; background:#d4d0c8;">📤 ส่งโน้ตปัจจุบันใน Notepad ข้ามไปอีกเครื่อง</button>
+    </div>
+  </div>
+</div>
+
+<!-- Window: My Documents -->
+<div class="window" id="win-docs" data-title="📁 My Documents">
+  <div class="title-bar">
+    <span>📁 My Documents</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-docs">_</button>
+      <button class="win-btn" data-close="win-docs">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="doc-toolbar">
+      <input type="text" id="new-doc-name" placeholder="ตั้งชื่อไฟล์ใหม่..." style="flex:1;">
+      <button class="btn-95" id="btn-create-doc">+ สร้าง</button>
+    </div>
+    <div class="doc-list" id="doc-list"></div>
+  </div>
+</div>
+
+<!-- Window: Notepad -->
+<div class="window" id="win-note" data-title="📝 Notepad">
+  <div class="title-bar">
+    <span id="note-title">📝 Notepad - บันทึกทั่วไป</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-note">_</button>
+      <button class="win-btn" data-close="win-note">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
+      <span id="note-status" style="color:#006400; font-weight:bold; font-size:12px;">บันทึกอัตโนมัติ</span>
+      <button class="btn-95" id="btn-save-doc">💾 บันทึกลง My Documents</button>
+    </div>
+    <textarea id="note-area" style="width:100%; height:180px; resize:none;" placeholder="พิมพ์ข้อความที่นี่..."></textarea>
+  </div>
+</div>
+
+<!-- Window: Paint -->
+<div class="window" id="win-paint" data-title="🎨 Paint">
+  <div class="title-bar">
+    <span>🎨 Paint</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-paint">_</button>
+      <button class="win-btn" data-close="win-paint">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="paint-tools">
+      <div class="color-dot" style="background:#000000;" data-color="#000000"></div>
+      <div class="color-dot" style="background:#ff0000;" data-color="#ff0000"></div>
+      <div class="color-dot" style="background:#0000ff;" data-color="#0000ff"></div>
+      <div class="color-dot" style="background:#008000;" data-color="#008000"></div>
+      <div class="color-dot" style="background:#ffffff;" data-color="#ffffff" title="ยางลบ"></div>
+      <button class="btn-95" id="btn-clear-paint">ล้างกระดาษ</button>
+      <button class="btn-95" id="btn-save-paint">💾 เซฟรูป</button>
+    </div>
+    <canvas id="paint-canvas" width="360" height="210"></canvas>
+  </div>
+</div>
+
+<!-- Window: Calculator -->
+<div class="window" id="win-calc" data-title="🧮 Calculator">
+  <div class="title-bar">
+    <span>🧮 Calculator</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-calc">_</button>
+      <button class="win-btn" data-close="win-calc">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="calc-display">0</div>
+    <div class="calc-grid">
+      <button class="btn-95 calc-btn" data-calc="7">7</button>
+      <button class="btn-95 calc-btn" data-calc="8">8</button>
+      <button class="btn-95 calc-btn" data-calc="9">9</button>
+      <button class="btn-95 calc-btn" data-calc="/">÷</button>
+      <button class="btn-95 calc-btn" data-calc="4">4</button>
+      <button class="btn-95 calc-btn" data-calc="5">5</button>
+      <button class="btn-95 calc-btn" data-calc="6">6</button>
+      <button class="btn-95 calc-btn" data-calc="*">×</button>
+      <button class="btn-95 calc-btn" data-calc="1">1</button>
+      <button class="btn-95 calc-btn" data-calc="2">2</button>
+      <button class="btn-95 calc-btn" data-calc="3">3</button>
+      <button class="btn-95 calc-btn" data-calc="-">-</button>
+      <button class="btn-95 calc-btn" data-calc="C">C</button>
+      <button class="btn-95 calc-btn" data-calc="0">0</button>
+      <button class="btn-95 calc-btn" data-calc="=">=</button>
+      <button class="btn-95 calc-btn" data-calc="+">+</button>
+    </div>
+  </div>
+</div>
+
+<!-- Window: Minesweeper -->
+<div class="window" id="win-mine" data-title="💣 Minesweeper">
+  <div class="title-bar">
+    <span>💣 Minesweeper (8x8)</span>
+    <div class="title-controls">
+      <button class="win-btn" data-min="win-mine">_</button>
+      <button class="win-btn" data-close="win-mine">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
+      <span id="mine-status" style="font-weight:bold;">ระเบิดซ่อนอยู่: 8 ลูก</span>
+      <button class="btn-95" id="btn-reset-mine">🙂 เริ่มใหม่</button>
+    </div>
+    <div class="mine-grid" id="mine-grid"></div>
+  </div>
+</div>
+
+<!-- Start Menu -->
+<div id="start-menu">
+  <div class="menu-item" data-open="win-p2p">💬 แชตข้ามเครื่อง (P2P)</div>
+  <div class="menu-item" data-open="win-docs">📁 My Documents</div>
+  <div class="menu-item" data-open="win-note">📝 Notepad</div>
+  <div class="menu-item" data-open="win-paint">🎨 Paint</div>
+  <div class="menu-item" data-open="win-calc">🧮 Calculator</div>
+  <div class="menu-item" data-open="win-mine">💣 Minesweeper</div>
+  <div class="menu-item" id="btn-bg">🎨 เปลี่ยนสีพื้นหลัง</div>
+</div>
+
+<!-- Taskbar -->
+<div id="taskbar">
+  <button id="start-btn">🪟 Start</button>
+  <div id="task-list"></div>
+  <div id="clock">00:00</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  let zIndexCounter = 20;
+  const openWindows = new Set();
+
+  // --- Window Management ---
+  function bringToFront(win) {
+    zIndexCounter++;
+    win.style.zIndex = zIndexCounter;
+    updateTaskbar(win.id);
+  }
+
+  function openWindow(id) {
+    const win = document.getElementById(id);
+    if (!win) return;
+    win.style.display = 'flex';
+    openWindows.add(id);
+    bringToFront(win);
+    document.getElementById('start-menu').style.display = 'none';
+    if (id === 'win-docs') renderDocs();
+    if (id === 'win-mine' && document.getElementById('mine-grid').innerHTML === '') initMine();
+  }
+
+  function closeWindow(id) {
+    const win = document.getElementById(id);
+    if (win) win.style.display = 'none';
+    openWindows.delete(id);
+    updateTaskbar(null);
+  }
+
+  function minimizeWindow(id) {
+    const win = document.getElementById(id);
+    if (win) win.style.display = 'none';
+    updateTaskbar(null);
+  }
+
+  function updateTaskbar(activeId) {
+    const list = document.getElementById('task-list');
+    list.innerHTML = '';
+    openWindows.forEach(id => {
+      const win = document.getElementById(id);
+      const tab = document.createElement('button');
+      tab.className = 'task-tab' + (id === activeId && win.style.display !== 'none' ? ' active' : '');
+      tab.textContent = win.getAttribute('data-title');
+      tab.addEventListener('click', () => {
+        if (win.style.display === 'none') {
+          win.style.display = 'flex';
+          bringToFront(win);
+        } else if (id === activeId) {
+          minimizeWindow(id);
+        } else {
+          bringToFront(win);
+        }
+      });
+      list.appendChild(tab);
+    });
+  }
+
+  document.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => openWindow(el.getAttribute('data-open')));
+  });
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeWindow(el.getAttribute('data-close'));
+    });
+  });
+  document.querySelectorAll('[data-min]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      minimizeWindow(el.getAttribute('data-min'));
+    });
+  });
+  document.querySelectorAll('.window').forEach(win => {
+    win.addEventListener('mousedown', () => bringToFront(win));
+    win.addEventListener('touchstart', () => bringToFront(win), { passive: true });
+  });
+
+  // Start Menu & Clock & Background
+  const startBtn = document.getElementById('start-btn');
+  const startMenu = document.getElementById('start-menu');
+  startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startMenu.style.display = startMenu.style.display === 'flex' ? 'none' : 'flex';
+  });
+  document.getElementById('desktop').addEventListener('click', () => {
+    startMenu.style.display = 'none';
+  });
+
+  const bgColors = ['#008080', '#1e272e', '#004d40', '#2c3e50', '#3b3b98'];
+  let bgIdx = 0;
+  document.getElementById('btn-bg').addEventListener('click', () => {
+    bgIdx = (bgIdx + 1) % bgColors.length;
+    document.body.style.background = bgColors[bgIdx];
+    startMenu.style.display = 'none';
+  });
+
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // --- Draggable Title Bars ---
+  document.querySelectorAll('.title-bar').forEach(bar => {
+    let isDragging = false, startX, startY, origX, origY;
+    const win = bar.parentElement;
+
+    const startDrag = (clientX, clientY) => {
+      isDragging = true;
+      startX = clientX;
+      startY = clientY;
+      origX = win.offsetLeft;
+      origY = win.offsetTop;
+      bringToFront(win);
+    };
+
+    const onDrag = (clientX, clientY) => {
+      if (!isDragging) return;
+      win.style.left = (origX + clientX - startX) + 'px';
+      win.style.top = Math.max(0, origY + clientY - startY) + 'px';
+    };
+
+    const stopDrag = () => { isDragging = false; };
+
+    bar.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      startDrag(e.clientX, e.clientY);
+    });
+    window.addEventListener('mousemove', e => onDrag(e.clientX, e.clientY));
+    window.addEventListener('mouseup', stopDrag);
+
+    bar.addEventListener('touchstart', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      const t = e.touches[0];
+      startDrag(t.clientX, t.clientY);
+    }, { passive: true });
+    window.addEventListener('touchmove', e => {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      onDrag(t.clientX, t.clientY);
+    }, { passive: true });
+    window.addEventListener('touchend', stopDrag);
+  });
+
+  // --- WebRTC P2P Cross-Device Communication ---
+  let pc = null;
+  let dataChannel = null;
+  const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+  function appendChat(sender, text, cls) {
+    const log = document.getElementById('chat-log');
+    const div = document.createElement('div');
+    div.className = cls;
+    div.textContent = (sender ? sender + ': ' : '') + text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setupDataChannel(channel) {
+    dataChannel = channel;
+    dataChannel.onopen = () => {
+      document.getElementById('p2p-setup').style.display = 'none';
+      document.getElementById('p2p-connected').style.display = 'block';
+      appendChat('', 'เชื่อมต่อสำเร็จ! สามารถพิมพ์คุยหรือโยนโน้ตข้ามเครื่องได้ทันที', 'msg-sys');
+    };
+    dataChannel.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'chat') {
+          appendChat('อีกเครื่อง', payload.text, 'msg-peer');
+        } else if (payload.type === 'note') {
+          noteArea.value = payload.content;
+          localStorage.setItem('win95_quick_note', payload.content);
+          openWindow('win-note');
+          appendChat('', '📥 ได้รับไฟล์โน้ตจากอีกเครื่องและเปิดใน Notepad แล้ว!', 'msg-sys');
+        }
+      } catch (e) {
+        appendChat('อีกเครื่อง', event.data, 'msg-peer');
+      }
+    };
+  }
+
+  // Host (Machine 1) creates Offer
+  document.getElementById('btn-create-offer').addEventListener('click', async () => {
+    pc = new RTCPeerConnection(rtcConfig);
+    const channel = pc.createDataChannel('win95-p2p');
+    setupDataChannel(channel);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate === null) {
+        document.getElementById('offer-out').value = btoa(JSON.stringify(pc.localDescription));
+      }
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    document.getElementById('offer-out').value = 'กำลังสร้างรหัส... รอสักครู่';
+  });
+
+  document.getElementById('btn-copy-offer').addEventListener('click', () => {
+    const el = document.getElementById('offer-out');
+    el.select();
+    navigator.clipboard.writeText(el.value);
+    alert('คัดลอกรหัสห้องแล้ว! ส่งรหัสนี้ไปวางในเครื่องที่ 2 ได้เลย');
+  });
+
+  // Guest (Machine 2) accepts Offer and creates Answer
+  document.getElementById('btn-create-answer').addEventListener('click', async () => {
+    const raw = document.getElementById('offer-in').value.trim();
+    if (!raw) return alert('กรุณาวางรหัสจากเครื่องที่ 1 ก่อนครับ');
+    try {
+      const offerDesc = JSON.parse(atob(raw));
+      pc = new RTCPeerConnection(rtcConfig);
+      pc.ondatachannel = (e) => setupDataChannel(e.channel);
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate === null) {
+          document.getElementById('answer-out').value = btoa(JSON.stringify(pc.localDescription));
+        }
+      };
+      await pc.setRemoteDescription(offerDesc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      document.getElementById('answer-out').value = 'กำลังสร้างรหัสตอบกลับ... รอสักครู่';
+    } catch (err) {
+      alert('รหัสไม่ถูกต้อง กรุณาคัดลอกมาวางให้ครบถ้วนครับ');
+    }
+  });
+
+  document.getElementById('btn-copy-answer').addEventListener('click', () => {
+    const el = document.getElementById('answer-out');
+    el.select();
+    navigator.clipboard.writeText(el.value);
+    alert('คัดลอกรหัสตอบกลับแล้ว! ส่งคืนไปวางในช่องที่ 3 ของเครื่องที่ 1 ได้เลย');
+  });
+
+  // Host (Machine 1) accepts Answer
+  document.getElementById('btn-accept-answer').addEventListener('click', async () => {
+    const raw = document.getElementById('answer-in').value.trim();
+    if (!raw || !pc) return alert('กรุณากดสร้างห้องก่อน และวางรหัสตอบกลับให้ครบครับ');
+    try {
+      const answerDesc = JSON.parse(atob(raw));
+      await pc.setRemoteDescription(answerDesc);
+    } catch (err) {
+      alert('รหัสตอบกลับไม่ถูกต้อง กรุณาตรวจสอบอีกครั้งครับ');
+    }
+  });
+
+  // Send Chat & Note
+  document.getElementById('btn-send-chat').addEventListener('click', () => {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || !dataChannel || dataChannel.readyState !== 'open') return;
+    dataChannel.send(JSON.stringify({ type: 'chat', text }));
+    appendChat('ฉัน', text, 'msg-me');
+    input.value = '';
+  });
+
+  document.getElementById('btn-send-note').addEventListener('click', () => {
+    if (!dataChannel || dataChannel.readyState !== 'open') return;
+    dataChannel.send(JSON.stringify({ type: 'note', content: noteArea.value }));
+    appendChat('', '📤 ส่งเนื้อหาใน Notepad ไปยังอีกเครื่องเรียบร้อยแล้ว!', 'msg-sys');
+  });
+
+  // --- Notepad & My Documents ---
+  const noteArea = document.getElementById('note-area');
+  let currentDocName = null;
+  noteArea.value = localStorage.getItem('win95_quick_note') || '';
+
+  noteArea.addEventListener('input', () => {
+    if (!currentDocName) {
+      localStorage.setItem('win95_quick_note', noteArea.value);
+    } else {
+      const docs = JSON.parse(localStorage.getItem('win95_docs') || '{}');
+      docs[currentDocName] = noteArea.value;
+      localStorage.setItem('win95_docs', JSON.stringify(docs));
+    }
+  });
+
+  function renderDocs() {
+    const list = document.getElementById('doc-list');
+    const docs = JSON.parse(localStorage.getItem('win95_docs') || '{}');
+    list.innerHTML = '';
+    const keys = Object.keys(docs);
+    if (keys.length === 0) {
+      list.innerHTML = '<div style="color:#666; padding:10px;">ยังไม่มีไฟล์เอกสาร กดสร้างไฟล์ใหม่ด้านบนได้เลย</div>';
+      return;
+    }
+    keys.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'doc-item';
+      row.innerHTML = `<span>📄 ${name}.txt</span>`;
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-95';
+      delBtn.textContent = 'ลบ';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        delete docs[name];
+        localStorage.setItem('win95_docs', JSON.stringify(docs));
+        renderDocs();
+      });
+      row.addEventListener('click', () => {
+        currentDocName = name;
+        document.getElementById('note-title').textContent = `📝 Notepad - ${name}.txt`;
+        noteArea.value = docs[name];
+        openWindow('win-note');
+      });
+      row.appendChild(delBtn);
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById('btn-create-doc').addEventListener('click', () => {
+    const input = document.getElementById('new-doc-name');
+    const name = input.value.trim();
+    if (!name) return;
+    const docs = JSON.parse(localStorage.getItem('win95_docs') || '{}');
+    if (!docs[name]) docs[name] = '';
+    localStorage.setItem('win95_docs', JSON.stringify(docs));
+    input.value = '';
+    renderDocs();
+  });
+
+  document.getElementById('btn-save-doc').addEventListener('click', () => {
+    const name = prompt('ตั้งชื่อไฟล์สำหรับบันทึกใน My Documents:', currentDocName || 'บันทึกใหม่');
+    if (!name) return;
+    const docs = JSON.parse(localStorage.getItem('win95_docs') || '{}');
+    docs[name.trim()] = noteArea.value;
+    localStorage.setItem('win95_docs', JSON.stringify(docs));
+    currentDocName = name.trim();
+    document.getElementById('note-title').textContent = `📝 Notepad - ${currentDocName}.txt`;
+    renderDocs();
+    alert('บันทึกไฟล์เรียบร้อยแล้ว!');
+  });
+
+  // --- Paint ---
+  const canvas = document.getElementById('paint-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let painting = false, brushColor = '#000000';
+
+  document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('click', () => { brushColor = dot.getAttribute('data-color'); });
+  });
+
+  function getCanvasPos(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('mousedown', e => {
+    painting = true;
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (!painting) return;
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    ctx.lineWidth = brushColor === '#ffffff' ? 14 : 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = brushColor;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  });
+  window.addEventListener('mouseup', () => { painting = false; });
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    painting = true;
+    const t = e.touches[0];
+    const pos = getCanvasPos(t.clientX, t.clientY);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!painting) return;
+    const t = e.touches[0];
+    const pos = getCanvasPos(t.clientX, t.clientY);
+    ctx.lineWidth = brushColor === '#ffffff' ? 14 : 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = brushColor;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }, { passive: false });
+  window.addEventListener('touchend', () => { painting = false; });
+
+  document.getElementById('btn-clear-paint').addEventListener('click', () => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  });
+  document.getElementById('btn-save-paint').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'paint_art.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+
+  // --- Calculator ---
+  let calcExpr = '';
+  const calcDisp = document.getElementById('calc-display');
+  document.querySelectorAll('.calc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const val = btn.getAttribute('data-calc');
+      if (val === 'C') {
+        calcExpr = '';
+        calcDisp.textContent = '0';
+      } else if (val === '=') {
+        try {
+          calcExpr = String(Function('"use strict";return (' + calcExpr + ')')());
+          calcDisp.textContent = calcExpr;
+        } catch {
+          calcDisp.textContent = 'Error';
+          calcExpr = '';
+        }
+      } else {
+        calcExpr += val;
+        calcDisp.textContent = calcExpr;
+      }
+    });
+  });
+
+  // --- Minesweeper ---
+  function initMine() {
+    const grid = document.getElementById('mine-grid');
+    const status = document.getElementById('mine-status');
+    grid.innerHTML = '';
+    status.textContent = 'ระเบิดซ่อนอยู่: 8 ลูก';
+    const size = 8, totalMines = 8;
+    const cells = Array(size * size).fill(0);
+    let placed = 0;
+    while (placed < totalMines) {
+      const idx = Math.floor(Math.random() * cells.length);
+      if (cells[idx] !== 'M') { cells[idx] = 'M'; placed++; }
+    }
+    for (let i = 0; i < cells.length; i++) {
+      if (cells[i] === 'M') continue;
+      let count = 0;
+      const r = Math.floor(i / size), c = i % size;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size && cells[nr * size + nc] === 'M') count++;
+        }
+      }
+      cells[i] = count;
+    }
+
+    let gameOver = false, revealed = 0;
+    cells.forEach((val, idx) => {
+      const div = document.createElement('div');
+      div.className = 'mine-cell';
+      div.addEventListener('click', () => {
+        if (gameOver || div.classList.contains('open')) return;
+        div.classList.add('open');
+        if (val === 'M') {
+          div.textContent = '💥';
+          div.style.background = '#ff4d4d';
+          status.textContent = '💥 บึ้ม! แพ้แล้ว';
+          gameOver = true;
+        } else {
+          div.textContent = val > 0 ? val : '';
+          revealed++;
+          if (revealed === size * size - totalMines) {
+            status.textContent = '🎉 ชนะแล้ว! กู้ระเบิดครบ';
+            gameOver = true;
+          }
+        }
+      });
+      grid.appendChild(div);
+    });
+  }
+  document.getElementById('btn-reset-mine').addEventListener('click', initMine);
+});
+</script>
+</body>
+</html>

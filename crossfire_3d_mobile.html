@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Crossfire Arena 3D - Mobile FPS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #090c10;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    touch-action: none;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Crosshair ตรงกลางจอ */
+  .crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .crosshair::before, .crosshair::after {
+    content: '';
+    position: absolute;
+    background: #00ff66;
+    box-shadow: 0 0 4px #000;
+  }
+  .crosshair::before { top: 11px; left: 2px; width: 20px; height: 2px; }
+  .crosshair::after { left: 11px; top: 2px; width: 2px; height: 20px; }
+
+  /* HUD ด้านบน */
+  .hud-top {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 15;
+  }
+  .stats-box {
+    background: rgba(10, 15, 22, 0.72);
+    border: 1px solid rgba(255, 165, 0, 0.45);
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    backdrop-filter: blur(4px);
+  }
+  .stats-box strong { color: #ff9f1c; }
+  .gyro-btn {
+    pointer-events: auto;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 245, 212, 0.5);
+    background: rgba(10, 20, 30, 0.8);
+    color: #00f5d4;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .gyro-btn.active {
+    background: rgba(0, 245, 212, 0.25);
+    box-shadow: 0 0 12px rgba(0, 245, 212, 0.4);
+  }
+
+  /* Minimap มุมขวาบน */
+  #minimap {
+    width: 110px;
+    height: 110px;
+    border: 2px solid rgba(255, 159, 28, 0.7);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.75);
+  }
+
+  /* Virtual Joystick ฝั่งซ้าย */
+  .joystick-zone {
+    position: absolute;
+    bottom: 28px;
+    left: 28px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    z-index: 20;
+    touch-action: none;
+  }
+  .joystick-knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 52px;
+    height: 52px;
+    margin-left: -26px;
+    margin-top: -26px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffd166, #f77f00);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+  }
+
+  /* พื้นที่ลากหันมุมกล้องฝั่งขวา */
+  .look-zone {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 55%;
+    height: 100%;
+    z-index: 12;
+    touch-action: none;
+  }
+
+  /* ปุ่มยิงและปุ่มกดสัญญาณเตือนนิวเคลียร์ฝั่งขวา */
+  .action-buttons {
+    position: absolute;
+    bottom: 32px;
+    right: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-end;
+    z-index: 25;
+  }
+  .fire-btn {
+    width: 82px;
+    height: 82px;
+    border-radius: 50%;
+    border: 3px solid #ff4d6d;
+    background: radial-gradient(circle, rgba(255, 77, 109, 0.7), rgba(180, 20, 40, 0.85));
+    color: #fff;
+    font-weight: bold;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 20px rgba(255, 77, 109, 0.5);
+    touch-action: manipulation;
+  }
+  .fire-btn:active { transform: scale(0.92); background: #ff4d6d; }
+
+  .nuke-btn {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 2px solid #ffd166;
+    background: rgba(255, 183, 3, 0.85);
+    color: #090c10;
+    font-weight: bold;
+    font-size: 13px;
+    display: none;
+    box-shadow: 0 0 15px #ffb703;
+    animation: pulse 0.8s infinite alternate;
+  }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+  /* หน้าจอเริ่มต้น */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 11, 16, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+    padding: 24px;
+    text-align: center;
+  }
+  .overlay h1 {
+    font-size: 26px;
+    color: #ff9f1c;
+    text-shadow: 0 0 15px rgba(255, 159, 28, 0.6);
+    margin-bottom: 10px;
+  }
+  .overlay p {
+    color: #cbd5e1;
+    font-size: 14px;
+    max-width: 380px;
+    line-height: 1.6;
+    margin-bottom: 22px;
+  }
+  .start-btn {
+    padding: 14px 34px;
+    border-radius: 28px;
+    border: none;
+    background: linear-gradient(135deg, #ff9f1c, #e71d36);
+    color: #fff;
+    font-size: 17px;
+    font-weight: bold;
+    box-shadow: 0 4px 20px rgba(231, 29, 54, 0.5);
+    cursor: pointer;
+  }
+  .alert-banner {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(220, 38, 38, 0.9);
+    border: 2px solid #fde047;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 30;
+    display: none;
+    white-space: nowrap;
+    box-shadow: 0 0 25px #ef4444;
+  }
+</style>
+</head>
+<body>
+
+<div class="hud-top">
+  <div class="stats-box">
+    <div>HP: <strong id="hpEl">100</strong> | KILLS: <strong id="killEl">0</strong></div>
+    <div>โซน: <strong id="zoneEl">ลานกลาง Crossfire</strong></div>
+    <button class="gyro-btn" id="gyroBtn" style="margin-top:6px;">🧭 เปิดไจโรสโคป (Gyro)</button>
+  </div>
+  <canvas id="minimap" width="110" height="110"></canvas>
+</div>
+
+<div class="alert-banner" id="alertBanner">☢️ สัญญาณเตือนนิวเคลียร์! วิ่งเข้าบังเกอร์ด่วน (<span id="nukeTimer">8.0</span>s)</div>
+
+<div class="crosshair"></div>
+<canvas id="viewCanvas"></canvas>
+
+<div class="look-zone" id="lookZone"></div>
+
+<div class="joystick-zone" id="joyZone">
+  <div class="joystick-knob" id="joyKnob"></div>
+</div>
+
+<div class="action-buttons">
+  <button class="nuke-btn" id="nukeBtn">☢️ กดปุ่มปล่อยระเบิดนิวเคลียร์</button>
+  <div class="fire-btn" id="fireBtn">🔥 ยิง</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <h1>☢️ CROSSFIRE ARENA 3D</h1>
+  <p>
+    จำลองแผนที่ระดับตำนาน Half-Life Crossfire<br>
+    • <strong>ซ้ายล่าง:</strong> ลาก Joystick เดินหน้า-ถอยหลัง-สไลด์ข้าง<br>
+    • <strong>ฝั่งขวา / Gyro:</strong> ลากหน้าจอหรือเอียงมือถือเพื่อเล็ง<br>
+    • บุกเข้า <strong>บังเกอร์ด้านเหนือ</strong> เพื่อกดปุ่มปล่อยนิวเคลียร์!
+  </p>
+  <button class="start-btn" id="startBtn">เข้าสู่สมรภูมิ</button>
+</div>
+
+<script>
+  const canvas = document.getElementById('viewCanvas');
+  const ctx = canvas.getContext('2d');
+  const miniCanvas = document.getElementById('minimap');
+  const miniCtx = miniCanvas.getContext('2d');
+
+  const hpEl = document.getElementById('hpEl');
+  const killEl = document.getElementById('killEl');
+  const zoneEl = document.getElementById('zoneEl');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const gyroBtn = document.getElementById('gyroBtn');
+  const nukeBtn = document.getElementById('nukeBtn');
+  const alertBanner = document.getElementById('alertBanner');
+  const nukeTimerEl = document.getElementById('nukeTimer');
+
+  let W, H;
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ระบบเสียงสังเคราะห์ Web Audio API (เสียงปืน, ไซเรนนิวเคลียร์, ระเบิด)
+  let audioCtx = null;
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  function playGunshot() {
+    try {
+      initAudio();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(190, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(42, audioCtx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
+  }
+  function playSiren() {
+    try {
+      initAudio();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(780, audioCtx.currentTime + 0.6);
+      osc.frequency.linearRampToValueAtTime(440, audioCtx.currentTime + 1.2);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 1.2);
+    } catch (e) {}
+  }
+
+  // แผนที่จำลอง Crossfire (16x16 ช่อง)
+  // 1 = กำแพงคอนกรีต, 2 = บังเกอร์เหล็ก (กันนิวเคลียร์ได้), 3 = แท่นกดปุ่มนิวเคลียร์, 0 = ลานโล่ง
+  const MAP_SIZE = 16;
+  const worldMap = [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,0,0,0,0,0,3,0,0,0,0,0,0,0,2], // ห้องควบคุมนิวเคลียร์ในบังเกอร์
+    [2,0,2,2,0,0,0,0,0,0,0,2,2,0,0,2],
+    [2,0,2,0,0,0,2,0,0,2,0,0,2,0,0,2],
+    [2,2,2,0,2,2,2,0,0,2,2,2,0,2,2,2], // ทางเข้าบังเกอร์
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,0,0,0,0,0,0,0,1,1,0,1], // ป้อมปืนซ้าย-ขวา ลานกลาง Crossfire
+    [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1], // บังเกอร์เตี้ยกลางลาน
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,1,1,0,0,0,0,0,0,0,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,0,0,0,0,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  ];
+
+  // สถานะผู้เล่น
+  let player = {
+    x: 8.0,
+    y: 12.5,
+    angle: -Math.PI / 2, // หันหน้าขึ้นทิศเหนือไปทางบังเกอร์
+    hp: 100,
+    kills: 0,
+    recoil: 0,
+    bob: 0
+  };
+
+  // ศัตรู (บอทลาดตระเวนในฉาก)
+  let enemies = [
+    { x: 4.5, y: 7.5, hp: 100, alive: true, hitFlash: 0 },
+    { x: 11.5, y: 7.5, hp: 100, alive: true, hitFlash: 0 },
+    { x: 8.0, y: 5.5, hp: 100, alive: true, hitFlash: 0 },
+    { x: 5.5, y: 2.5, hp: 100, alive: true, hitFlash: 0 },
+    { x: 10.5, y: 2.5, hp: 100, alive: true, hitFlash: 0 }
+  ];
+
+  // สถานะนิวเคลียร์
+  let nukeActive = false;
+  let nukeCountdown = 0;
+  let screenFlash = 0;
+  let gameStarted = false;
+
+  // ระบบ Virtual Joystick (ซ้ายล่าง)
+  const joyZone = document.getElementById('joyZone');
+  const joyKnob = document.getElementById('joyKnob');
+  let joyActive = false;
+  let joyTouchId = null;
+  let joyVec = { x: 0, y: 0 }; // ค่า -1 ถึง 1
+
+  joyZone.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    joyActive = true;
+    joyTouchId = touch.identifier;
+    updateJoystick(touch.clientX, touch.clientY);
+  });
+  joyZone.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        updateJoystick(t.clientX, t.clientY);
+      }
+    }
+  });
+  function resetJoystick(e) {
+    for (let t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        joyActive = false;
+        joyTouchId = null;
+        joyVec = { x: 0, y: 0 };
+        joyKnob.style.transform = `translate(0px, 0px)`;
+      }
+    }
+  }
+  joyZone.addEventListener('touchend', resetJoystick);
+  joyZone.addEventListener('touchcancel', resetJoystick);
+
+  function updateJoystick(clientX, clientY) {
+    const rect = joyZone.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const maxR = rect.width / 2 - 20;
+    let dx = clientX - centerX;
+    let dy = clientY - centerY;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) {
+      dx = (dx / dist) * maxR;
+      dy = (dy / dist) * maxR;
+    }
+    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyVec.x = dx / maxR; // สไลด์ซ้าย-ขวา (Strafe)
+    joyVec.y = dy / maxR; // เดินหน้า-ถอยหลัง
+  }
+
+  // ระบบลากนิ้วหันมุมกล้องฝั่งขวา (Touch Look)
+  const lookZone = document.getElementById('lookZone');
+  let lookTouchId = null;
+  let lastLookX = 0;
+
+  lookZone.addEventListener('touchstart', (e) => {
+    const touch = e.changedTouches[0];
+    lookTouchId = touch.identifier;
+    lastLookX = touch.clientX;
+  });
+  lookZone.addEventListener('touchmove', (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === lookTouchId) {
+        const dx = t.clientX - lastLookX;
+        player.angle += dx * 0.0065;
+        lastLookX = t.clientX;
+      }
+    }
+  });
+  lookZone.addEventListener('touchend', (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === lookTouchId) lookTouchId = null;
+    }
+  });
+
+  // รองรับคีย์บอร์ดสำหรับทดสอบบนคอมพิวเตอร์ด้วย
+  const keys = {};
+  window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+  window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+  // ระบบไจโรสโคป (Gyroscope Aiming)
+  let gyroEnabled = false;
+  let lastGamma = null;
+
+  gyroBtn.addEventListener('click', async () => {
+    if (!gyroEnabled) {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== 'granted') return alert('ไม่ได้รับอนุญาตเข้าถึงเซ็นเซอร์ไจโรสโคป');
+        } catch (err) {}
+      }
+      gyroEnabled = true;
+      lastGamma = null;
+      gyroBtn.classList.add('active');
+      gyroBtn.textContent = '🧭 ไจโรสโคป: เปิดอยู่';
+    } else {
+      gyroEnabled = false;
+      gyroBtn.classList.remove('active');
+      gyroBtn.textContent = '🧭 เปิดไจโรสโคป (Gyro)';
+    }
+  });
+
+  window.addEventListener('deviceorientation', (e) => {
+    if (!gyroEnabled || !gameStarted || e.gamma === null) return;
+    if (lastGamma !== null) {
+      let delta = e.gamma - lastGamma;
+      if (Math.abs(delta) < 35) {
+        player.angle += delta * 0.025;
+      }
+    }
+    lastGamma = e.gamma;
+  });
+
+  // ระบบยิงปืน (Hitscan Raycast Check)
+  document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    shoot();
+  });
+  document.getElementById('fireBtn').addEventListener('mousedown', shoot);
+
+  function shoot() {
+    if (!gameStarted || player.hp <= 0) return;
+    playGunshot();
+    player.recoil = 14;
+
+    // ตรวจสอบว่าเล็งตรงศัตรูที่อยู่ในระยะมองเห็นหรือไม่
+    let bestEnemy = null;
+    let bestDist = 999;
+
+    enemies.forEach(en => {
+      if (!en.alive) return;
+      const dx = en.x - player.x;
+      const dy = en.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      let angleToEnemy = Math.atan2(dy, dx) - player.angle;
+      while (angleToEnemy > Math.PI) angleToEnemy -= Math.PI * 2;
+      while (angleToEnemy < -Math.PI) angleToEnemy += Math.PI * 2;
+
+      // เช็กว่าอยู่ในศูนย์เล็ง และไม่มีกำแพงบัง
+      if (Math.abs(angleToEnemy) < 0.14 && dist < bestDist) {
+        const wallDist = castSingleRay(Math.atan2(dy, dx)).dist;
+        if (wallDist > dist) {
+          bestDist = dist;
+          bestEnemy = en;
+        }
+      }
+    });
+
+    if (bestEnemy) {
+      bestEnemy.hp -= 35;
+      bestEnemy.hitFlash = 6;
+      if (bestEnemy.hp <= 0) {
+        bestEnemy.alive = false;
+        player.kills++;
+        killEl.textContent = player.kills;
+        // เกิดใหม่ในจุดสุ่มหลังผ่านไป 4 วินาที
+        setTimeout(() => {
+          bestEnemy.x = 3 + Math.random() * 10;
+          bestEnemy.y = 5 + Math.random() * 8;
+          if (worldMap[Math.floor(bestEnemy.y)][Math.floor(bestEnemy.x)] !== 0) {
+            bestEnemy.x = 8.0; bestEnemy.y = 7.0;
+          }
+          bestEnemy.hp = 100;
+          bestEnemy.alive = true;
+        }, 4000);
+      }
+    }
+  }
+
+  // ปุ่มกดปล่อยระเบิดนิวเคลียร์ในบังเกอร์
+  nukeBtn.addEventListener('click', triggerNuke);
+  nukeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerNuke(); });
+
+  function triggerNuke() {
+    if (nukeActive) return;
+    nukeActive = true;
+    nukeCountdown = 8.0;
+    nukeBtn.style.display = 'none';
+    alertBanner.style.display = 'block';
+    playSiren();
+  }
+
+  startBtn.addEventListener('click', () => {
+    initAudio();
+    overlay.style.display = 'none';
+    gameStarted = true;
+  });
+
+  // ฟังก์ชันยิงแสง Raycast 1 เส้นเพื่อหาจุดชนกำแพง
+  function castSingleRay(rayAngle) {
+    const sin = Math.sin(rayAngle);
+    const cos = Math.cos(rayAngle);
+    let dist = 0;
+    let hitWall = 0;
+    let hitSide = 0;
+
+    while (dist < 22) {
+      dist += 0.04;
+      const testX = Math.floor(player.x + cos * dist);
+      const testY = Math.floor(player.y + sin * dist);
+      if (testX < 0 || testX >= MAP_SIZE || testY < 0 || testY >= MAP_SIZE) {
+        hitWall = 1;
+        break;
+      }
+      const cell = worldMap[testY][testX];
+      if (cell > 0) {
+        hitWall = cell;
+        const fracX = (player.x + cos * dist) - testX;
+        const fracY = (player.y + sin * dist) - testY;
+        hitSide = (Math.min(fracX, 1 - fracX) < Math.min(fracY, 1 - fracY)) ? 1 : 0;
+        break;
+      }
+    }
+    return { dist, hitWall, hitSide };
+  }
+
+  // อัปเดตการเคลื่อนที่และระบบเกม
+  let lastTime = performance.now();
+  function update(dt) {
+    if (!gameStarted || player.hp <= 0) return;
+
+    const moveSpeed = 3.8 * dt;
+    let forward = -joyVec.y;
+    let strafe = joyVec.x;
+
+    if (keys['w'] || keys['arrowup']) forward = 1;
+    if (keys['s'] || keys['arrowdown']) forward = -1;
+    if (keys['a']) strafe = -1;
+    if (keys['d']) strafe = 1;
+    if (keys['arrowleft']) player.angle -= 2.2 * dt;
+    if (keys['arrowright']) player.angle += 2.2 * dt;
+    if (keys[' ']) shoot();
+
+    const dx = (Math.cos(player.angle) * forward - Math.sin(player.angle) * strafe) * moveSpeed;
+    const dy = (Math.sin(player.angle) * forward + Math.cos(player.angle) * strafe) * moveSpeed;
+
+    // ตรวจจับการชนกำแพง (Slide Collision)
+    const margin = 0.25;
+    if (worldMap[Math.floor(player.y)][Math.floor(player.x + dx + Math.sign(dx) * margin)] === 0) {
+      player.x += dx;
+    }
+    if (worldMap[Math.floor(player.y + dy + Math.sign(dy) * margin)][Math.floor(player.x)] === 0) {
+      player.y += dy;
+    }
+
+    if (Math.hypot(dx, dy) > 0.001) {
+      player.bob += dt * 11;
+    }
+    if (player.recoil > 0) player.recoil = Math.max(0, player.recoil - dt * 60);
+    if (screenFlash > 0) screenFlash = Math.max(0, screenFlash - dt * 1.5);
+
+    // เช็กโซนปัจจุบัน (อยู่ในบังเกอร์ด้านเหนือ y < 4.2 หรืออยู่ลานกลาง)
+    const inBunker = player.y < 4.2;
+    zoneEl.textContent = inBunker ? '🛡️ ในบังเกอร์นิวเคลียร์' : '⚠️ ลานกลาง Crossfire';
+
+    // เช็กว่ายืนใกล้แท่นกดปุ่มนิวเคลียร์หรือไม่ (พิกัด x: 7.5, y: 1.5)
+    const distToNukeSwitch = Math.hypot(player.x - 7.5, player.y - 1.5);
+    if (distToNukeSwitch < 1.6 && !nukeActive) {
+      nukeBtn.style.display = 'block';
+    } else {
+      nukeBtn.style.display = 'none';
+    }
+
+    // นับถอยหลังระเบิดนิวเคลียร์
+    if (nukeActive) {
+      nukeCountdown -= dt;
+      nukeTimerEl.textContent = Math.max(0, nukeCountdown).toFixed(1);
+      if (Math.floor(nukeCountdown * 2) !== Math.floor((nukeCountdown + dt) * 2)) {
+        playSiren();
+      }
+      if (nukeCountdown <= 0) {
+        nukeActive = false;
+        alertBanner.style.display = 'none';
+        screenFlash = 1.0;
+        // ใครอยู่นอกบังเกอร์โดนแรงระเบิด!
+        enemies.forEach(en => {
+          if (en.alive && en.y >= 4.2) {
+            en.alive = false;
+            player.kills++;
+          }
+        });
+        killEl.textContent = player.kills;
+        if (!inBunker) {
+          player.hp = 0;
+          hpEl.textContent = 0;
+          overlay.innerHTML = `
+            <h1 style="color:#ff4d6d;">☢️ คุณไม่รอดจากแรงระเบิดนิวเคลียร์!</h1>
+            <p>ครั้งหน้าเมื่อสัญญาณเตือนดัง ให้รีบวิ่งเข้าบังเกอร์ด้านเหนือให้ทันเวลา<br>สถิติสังหาร: <strong>${player.kills}</strong></p>
+            <button class="start-btn" onclick="location.reload()">เกิดใหม่</button>
+          `;
+          overlay.style.display = 'flex';
+        }
+      }
+    }
+
+    // บอทศัตรูเคลื่อนที่ช้า ๆ และโจมตีระยะใกล้
+    enemies.forEach(en => {
+      if (!en.alive) return;
+      if (en.hitFlash > 0) en.hitFlash--;
+      const edx = player.x - en.x;
+      const edy = player.y - en.y;
+      const dist = Math.hypot(edx, edy);
+      if (dist > 1.5 && dist < 8) {
+        const vx = (edx / dist) * 1.1 * dt;
+        const vy = (edy / dist) * 1.1 * dt;
+        if (worldMap[Math.floor(en.y)][Math.floor(en.x + vx)] === 0) en.x += vx;
+        if (worldMap[Math.floor(en.y + vy)][Math.floor(en.x)] === 0) en.y += vy;
+      } else if (dist <= 1.5) {
+        player.hp = Math.max(0, player.hp - 12 * dt);
+        hpEl.textContent = Math.ceil(player.hp);
+        if (player.hp <= 0) {
+          overlay.innerHTML = `
+            <h1 style="color:#ff4d6d;">💀 คุณถูกกำจัดในสมรภูมิ!</h1>
+            <p>สถิติสังหารรวม: <strong>${player.kills}</strong></p>
+            <button class="start-btn" onclick="location.reload()">เล่นอีกครั้ง</button>
+          `;
+          overlay.style.display = 'flex';
+        }
+      }
+    });
+  }
+
+  // วาดฉาก 3D ด้วย Raycasting Engine
+  function render3D() {
+    // ท้องฟ้าและพื้นคอนกรีต
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H / 2);
+    skyGrad.addColorStop(0, '#1e293b');
+    skyGrad.addColorStop(1, '#475569');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H / 2);
+
+    const floorGrad = ctx.createLinearGradient(0, H / 2, 0, H);
+    floorGrad.addColorStop(0, '#1f2421');
+    floorGrad.addColorStop(1, '#343a40');
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, H / 2, W, H / 2);
+
+    const FOV = Math.PI / 3; // มุมมอง 60 องศา
+    const numRays = Math.min(W, 240); // จำนวนเส้นแสงแนวนอน (ปรับสมดุลความคมชัดและ FPS มือถือ)
+    const stripW = W / numRays;
+    const zBuffer = new Array(numRays);
+
+    for (let i = 0; i < numRays; i++) {
+      const rayAngle = (player.angle - FOV / 2) + (i / numRays) * FOV;
+      const { dist, hitWall, hitSide } = castSingleRay(rayAngle);
+
+      // แก้ภาพโค้ง Fish-eye
+      const correctedDist = dist * Math.cos(rayAngle - player.angle);
+      zBuffer[i] = correctedDist;
+
+      const wallHeight = Math.min(H * 1.5, H / Math.max(0.1, correctedDist));
+      const wallTop = (H - wallHeight) / 2;
+
+      // เลือกสีตามประเภทกำแพงและเงาแสง
+      const shade = Math.max(0.25, 1 - correctedDist / 16) * (hitSide ? 0.8 : 1.0);
+      let r = 140, g = 130, b = 115; // กำแพงปูนคอนกรีต Crossfire (สี 1)
+      if (hitWall === 2) {
+        r = 70; g = 95; b = 115;     // บังเกอร์เหล็กสีน้ำเงินเทา (สี 2)
+      } else if (hitWall === 3) {
+        r = 245; g = 180; b = 20;    // แท่นกดปุ่มนิวเคลียร์สีทองเหลือง (สี 3)
+      }
+
+      ctx.fillStyle = `rgb(${Math.floor(r * shade)}, ${Math.floor(g * shade)}, ${Math.floor(b * shade)})`;
+      ctx.fillRect(i * stripW, wallTop, stripW + 1, wallHeight);
+    }
+
+    // วาดศัตรู (3D Billboard Sprites) เรียงจากไกลมาใกล้
+    const sortedEnemies = enemies
+      .filter(e => e.alive)
+      .map(e => ({ ...e, dist: Math.hypot(e.x - player.x, e.y - player.y) }))
+      .sort((a, b) => b.dist - a.dist);
+
+    sortedEnemies.forEach(en => {
+      const dx = en.x - player.x;
+      const dy = en.y - player.y;
+      let spriteAngle = Math.atan2(dy, dx) - player.angle;
+      while (spriteAngle > Math.PI) spriteAngle -= Math.PI * 2;
+      while (spriteAngle < -Math.PI) spriteAngle += Math.PI * 2;
+
+      if (Math.abs(spriteAngle) < FOV * 0.7) {
+        const screenX = (0.5 + spriteAngle / FOV) * W;
+        const spriteH = Math.min(H, (H / en.dist) * 0.85);
+        const spriteW = spriteH * 0.48;
+        const spriteTop = (H - spriteH) / 2 + spriteH * 0.1;
+
+        const rayIdx = Math.floor((screenX / W) * numRays);
+        if (rayIdx >= 0 && rayIdx < numRays && zBuffer[rayIdx] > en.dist) {
+          // ตัวทหารฝ่ายตรงข้าม
+          ctx.fillStyle = en.hitFlash > 0 ? '#ffffff' : '#d90429';
+          ctx.fillRect(screenX - spriteW / 2, spriteTop, spriteW, spriteH * 0.85);
+          // หมวกเหล็ก
+          ctx.fillStyle = '#2b2d42';
+          ctx.fillRect(screenX - spriteW * 0.35, spriteTop - spriteH * 0.12, spriteW * 0.7, spriteH * 0.16);
+          // แถบเลือดบนหัว
+          ctx.fillStyle = '#00ff66';
+          ctx.fillRect(screenX - spriteW / 2, spriteTop - spriteH * 0.22, spriteW * (en.hp / 100), 4);
+        }
+      }
+    });
+
+    // วาดปืนในมือผู้เล่น (First-Person Weapon Viewmodel)
+    const bobX = Math.cos(player.bob) * 8;
+    const bobY = Math.abs(Math.sin(player.bob)) * 8 + player.recoil;
+    const gunX = W * 0.65 + bobX;
+    const gunY = H * 0.72 + bobY;
+
+    // ประกายไฟปากกระบอกปืนตอนยิง
+    if (player.recoil > 8) {
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(W * 0.54, H * 0.56, 26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ตัวปืนไรเฟิล
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(gunX - 25, H);
+    ctx.lineTo(gunX - 45, gunY);
+    ctx.lineTo(gunX - 15, gunY - 15);
+    ctx.lineTo(gunX + 45, H);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(gunX - 38, gunY - 8, 18, 55);
+
+    // แสงแฟลชสีขาวตอนระเบิดนิวเคลียร์ทำงาน
+    if (screenFlash > 0) {
+      ctx.fillStyle = `rgba(255, 255, 240, ${screenFlash})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // วาดเรดาร์ Minimap มุมขวาบน
+  function renderMinimap() {
+    const cell = 110 / MAP_SIZE;
+    miniCtx.clearRect(0, 0, 110, 110);
+
+    for (let y = 0; y < MAP_SIZE; y++) {
+      for (let x = 0; x < MAP_SIZE; x++) {
+        const v = worldMap[y][x];
+        if (v === 1) miniCtx.fillStyle = '#64748b';
+        else if (v === 2) miniCtx.fillStyle = '#0284c7';
+        else if (v === 3) miniCtx.fillStyle = '#eab308';
+        else miniCtx.fillStyle = '#0f172a';
+        miniCtx.fillRect(x * cell, y * cell, cell, cell);
+      }
+    }
+
+    // จุดศัตรูสีแดง
+    enemies.forEach(en => {
+      if (!en.alive) return;
+      miniCtx.fillStyle = '#ef4444';
+      miniCtx.beginPath();
+      miniCtx.arc(en.x * cell, en.y * cell, 2.5, 0, Math.PI * 2);
+      miniCtx.fill();
+    });
+
+    // จุดผู้เล่นสีเขียว + เส้นทิศทางเล็ง
+    miniCtx.fillStyle = '#22c55e';
+    miniCtx.beginPath();
+    miniCtx.arc(player.x * cell, player.y * cell, 3, 0, Math.PI * 2);
+    miniCtx.fill();
+
+    miniCtx.strokeStyle = '#22c55e';
+    miniCtx.lineWidth = 1.5;
+    miniCtx.beginPath();
+    miniCtx.moveTo(player.x * cell, player.y * cell);
+    miniCtx.lineTo((player.x + Math.cos(player.angle) * 2) * cell, (player.y + Math.sin(player.angle) * 2) * cell);
+    miniCtx.stroke();
+  }
+
+  function gameLoop(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    update(dt);
+    render3D();
+    renderMinimap();
+    requestAnimationFrame(gameLoop);
+  }
+  requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

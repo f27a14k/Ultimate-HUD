@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mini WebOS v2.0 (Windows 95 Edition)</title>
+<style>
+  * { box-sizing: border-box; user-select: none; font-family: 'Tahoma', 'Segoe UI', sans-serif; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #008080; }
+
+  /* พื้นที่หน้าจอหลัก (Desktop) */
+  #desktop {
+    width: 100%; height: calc(100% - 42px);
+    padding: 15px; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 18px;
+    position: relative;
+  }
+
+  /* ไอคอนบนหน้าจอ */
+  .icon {
+    width: 78px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    color: white; font-size: 12px; cursor: pointer; text-shadow: 1px 1px 1px #000;
+  }
+  .icon-box {
+    width: 46px; height: 46px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; margin-bottom: 5px;
+  }
+  .icon:active .icon-box { background: #000080; border-color: #fff; }
+
+  /* หน้าต่างโปรแกรม (Window) สไตล์ Win95 */
+  .window {
+    position: absolute; top: 25px; left: 4%; width: 92%; max-width: 420px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 10;
+  }
+  .title-bar {
+    background: #808080; color: #d4d0c8;
+    padding: 5px 6px; font-weight: bold; font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center; cursor: move;
+  }
+  .window.active .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: #ffffff;
+  }
+  .win-controls { display: flex; gap: 3px; }
+  .win-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    width: 22px; height: 20px; font-weight: bold; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .win-btn:active { border-color: #404040 #fff #fff #404040; }
+  .window-body { padding: 8px; flex: 1; }
+
+  /* ปุ่มมาตรฐาน Win95 */
+  .btn-95 {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 5px 10px; font-size: 13px; cursor: pointer; color: #000;
+  }
+  .btn-95:active { border-color: #404040 #fff #fff #404040; }
+
+  /* แถบ Taskbar ด้านล่าง */
+  #taskbar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 42px;
+    background: #c0c0c0; border-top: 2px solid #fff;
+    display: flex; align-items: center; padding: 0 4px; z-index: 1000; gap: 4px;
+  }
+  #start-btn {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 4px 10px; font-weight: bold; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  }
+  #start-btn:active, #start-btn.open { border-color: #404040 #fff #fff #404040; background: #b0b0b0; }
+
+  /* แถบสลับหน้าต่างบน Taskbar */
+  #task-list {
+    flex: 1; display: flex; gap: 4px; overflow-x: auto; align-items: center; height: 100%; padding: 4px 0;
+  }
+  .task-tab {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 3px 8px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    max-width: 110px; overflow: hidden; text-overflow: ellipsis; height: 30px; display: flex; align-items: center;
+  }
+  .task-tab.active-tab {
+    border-color: #404040 #fff #fff #404040; background: #e0e0e0; font-weight: bold;
+  }
+
+  #clock {
+    border: 2px solid; border-color: #808080 #fff #fff #808080;
+    padding: 4px 8px; font-size: 12px; background: #c0c0c0; font-weight: bold; flex-shrink: 0;
+  }
+
+  /* เมนู Start */
+  #start-menu {
+    position: fixed; bottom: 42px; left: 4px; width: 210px;
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    display: none; flex-direction: column; z-index: 999; box-shadow: 3px -3px 8px rgba(0,0,0,0.4);
+  }
+  .start-banner {
+    background: #000080; color: white; padding: 6px 10px; font-weight: bold; font-size: 13px;
+  }
+  .menu-item { padding: 9px 12px; border-bottom: 1px solid #999; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .menu-item:active { background: #000080; color: white; }
+
+  /* 1. My Documents (จัดการไฟล์) */
+  .doc-toolbar { display: flex; gap: 6px; margin-bottom: 8px; }
+  #file-list {
+    background: #fff; border: 2px inset #fff; height: 180px; overflow-y: auto; padding: 6px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .file-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 13px;
+  }
+  .file-name { cursor: pointer; color: #000080; font-weight: bold; flex: 1; }
+
+  /* 2. Notepad (แก้ไขไฟล์) */
+  #note-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+  textarea {
+    width: 100%; height: 170px; resize: none; border: 2px inset #fff; padding: 6px;
+    font-size: 14px; user-select: text; font-family: inherit;
+  }
+
+  /* 3. Paint (วาดรูป) */
+  .paint-tools { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; align-items: center; }
+  .color-swatch { width: 24px; height: 24px; border: 2px solid #808080; cursor: pointer; }
+  .color-swatch.selected { border: 2px solid #000; transform: scale(1.1); }
+  #paint-canvas {
+    background: #fff; border: 2px inset #fff; width: 100%; height: 210px; touch-action: none; display: block;
+  }
+
+  /* 4. Calculator */
+  #calc-display {
+    width: 100%; height: 38px; background: white; border: 2px inset #fff;
+    text-align: right; font-size: 20px; padding: 5px 8px; margin-bottom: 8px; overflow: hidden;
+  }
+  .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .calc-btn {
+    padding: 10px; font-size: 16px; font-weight: bold; background: #c0c0c0;
+    border: 2px solid; border-color: #fff #404040 #404040 #fff; cursor: pointer;
+  }
+  .calc-btn:active { border-color: #404040 #fff #fff #404040; }
+
+  /* 5. Minesweeper (กู้ระเบิด) */
+  .mine-header {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #c0c0c0; border: 2px inset #fff; padding: 5px 10px; margin-bottom: 8px; font-weight: bold;
+  }
+  #mine-grid {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    background: #808080; border: 2px inset #fff; padding: 2px;
+  }
+  .mine-cell {
+    aspect-ratio: 1; background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; cursor: pointer;
+  }
+  .mine-cell.revealed {
+    border: 1px solid #808080; background: #d4d0c8;
+  }
+</style>
+</head>
+<body>
+
+<div id="desktop" onclick="closeStartMenu()">
+  <div class="icon" onclick="openWindow('win-docs', '📁 My Documents')">
+    <div class="icon-box">📁</div>
+    <span>My Documents</span>
+  </div>
+  <div class="icon" onclick="openNewNote()">
+    <div class="icon-box">📝</div>
+    <span>Notepad</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-paint', '🎨 Paint')">
+    <div class="icon-box">🎨</div>
+    <span>Paint</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-calc', '🧮 Calculator')">
+    <div class="icon-box">🧮</div>
+    <span>Calculator</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-mine', '💣 Minesweeper')">
+    <div class="icon-box">💣</div>
+    <span>Minesweeper</span>
+  </div>
+</div>
+
+<!-- 1. หน้าต่าง My Documents -->
+<div class="window" id="win-docs" onmousedown="focusWindow('win-docs')" ontouchstart="focusWindow('win-docs')">
+  <div class="title-bar">
+    <span>📁 My Documents</span>
+    <div class="win-controls">
+      <button class="win-btn" onclick="minimizeWindow('win-docs')">_</button>
+      <button class="win-btn" onclick="closeWindow('win-docs')">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="doc-toolbar">
+      <button class="btn-95" onclick="createNewFile()">📄 สร้างไฟล์ใหม่</button>
+    </div>
+    <div id="file-list"></div>
+  </div>
+</div>
+
+<!-- 2. หน้าต่าง Notepad -->
+<div class="window" id="win-note" onmousedown="focusWindow('win-note')" ontouchstart="focusWindow('win-note')">
+  <div class="title-bar">
+    <span id="note-title">📝 Notepad - ไม่มีชื่อ.txt</span>
+    <div class="win-controls">
+      <button class="win-btn" onclick="minimizeWindow('win-note')">_</button>
+      <button class="win-btn" onclick="closeWindow('win-note')">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="note-header">
+      <span id="current-file-label" style="font-weight:bold; color:#000080;">ไฟล์: บันทึกด่วน.txt</span>
+      <button class="btn-95" onclick="saveCurrentNote()">💾 บันทึกไฟล์</button>
+    </div>
+    <textarea id="note-text" placeholder="พิมพ์ข้อความที่นี่..."></textarea>
+  </div>
+</div>
+
+<!-- 3. หน้าต่าง Paint -->
+<div class="window" id="win-paint" onmousedown="focusWindow('win-paint')" ontouchstart="focusWindow('win-paint')">
+  <div class="title-bar">
+    <span>🎨 Paint</span>
+    <div class="win-controls">
+      <button class="win-btn" onclick="minimizeWindow('win-paint')">_</button>
+      <button class="win-btn" onclick="closeWindow('win-paint')">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="paint-tools">
+      <div class="color-swatch selected" style="background:#000000;" onclick="setPaintColor('#000000', this)"></div>
+      <div class="color-swatch" style="background:#ff0000;" onclick="setPaintColor('#ff0000', this)"></div>
+      <div class="color-swatch" style="background:#0000ff;" onclick="setPaintColor('#0000ff', this)"></div>
+      <div class="color-swatch" style="background:#008000;" onclick="setPaintColor('#008000', this)"></div>
+      <div class="color-swatch" style="background:#ffff00;" onclick="setPaintColor('#ffff00', this)"></div>
+      <div class="color-swatch" style="background:#ffffff;" onclick="setPaintColor('#ffffff', this)" title="ยางลบ"></div>
+      <button class="btn-95" onclick="clearCanvas()">ล้างจอ</button>
+      <button class="btn-95" onclick="downloadPainting()">💾 เซฟรูป</button>
+    </div>
+    <canvas id="paint-canvas" width="360" height="210"></canvas>
+  </div>
+</div>
+
+<!-- 4. หน้าต่าง Calculator -->
+<div class="window" id="win-calc" onmousedown="focusWindow('win-calc')" ontouchstart="focusWindow('win-calc')">
+  <div class="title-bar">
+    <span>🧮 Calculator</span>
+    <div class="win-controls">
+      <button class="win-btn" onclick="minimizeWindow('win-calc')">_</button>
+      <button class="win-btn" onclick="closeWindow('win-calc')">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="calc-display">0</div>
+    <div class="calc-grid">
+      <button class="calc-btn" onclick="calcInput('7')">7</button><button class="calc-btn" onclick="calcInput('8')">8</button><button class="calc-btn" onclick="calcInput('9')">9</button><button class="calc-btn" onclick="calcInput('/')">÷</button>
+      <button class="calc-btn" onclick="calcInput('4')">4</button><button class="calc-btn" onclick="calcInput('5')">5</button><button class="calc-btn" onclick="calcInput('6')">6</button><button class="calc-btn" onclick="calcInput('*')">×</button>
+      <button class="calc-btn" onclick="calcInput('1')">1</button><button class="calc-btn" onclick="calcInput('2')">2</button><button class="calc-btn" onclick="calcInput('3')">3</button><button class="calc-btn" onclick="calcInput('-')">-</button>
+      <button class="calc-btn" onclick="calcClear()">C</button><button class="calc-btn" onclick="calcInput('0')">0</button><button class="calc-btn" onclick="calcResult()">=</button><button class="calc-btn" onclick="calcInput('+')">+</button>
+    </div>
+  </div>
+</div>
+
+<!-- 5. หน้าต่าง Minesweeper -->
+<div class="window" id="win-mine" onmousedown="focusWindow('win-mine')" ontouchstart="focusWindow('win-mine')">
+  <div class="title-bar">
+    <span>💣 Minesweeper</span>
+    <div class="win-controls">
+      <button class="win-btn" onclick="minimizeWindow('win-mine')">_</button>
+      <button class="win-btn" onclick="closeWindow('win-mine')">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="mine-header">
+      <span>💣 10 ลูก</span>
+      <button class="btn-95" id="mine-reset" onclick="initMinesweeper()">🙂 เริ่มใหม่</button>
+      <span id="mine-status">พร้อมเล่น</span>
+    </div>
+    <div id="mine-grid"></div>
+  </div>
+</div>
+
+<!-- เมนู Start -->
+<div id="start-menu">
+  <div class="start-banner">🪟 Windows 95 WebOS</div>
+  <div class="menu-item" onclick="openWindow('win-docs', '📁 My Documents')">📁 My Documents</div>
+  <div class="menu-item" onclick="openNewNote()">📝 Notepad</div>
+  <div class="menu-item" onclick="openWindow('win-paint', '🎨 Paint')">🎨 Paint</div>
+  <div class="menu-item" onclick="openWindow('win-calc', '🧮 Calculator')">🧮 Calculator</div>
+  <div class="menu-item" onclick="openWindow('win-mine', '💣 Minesweeper')">💣 Minesweeper</div>
+  <div class="menu-item" onclick="changeBg()">🖼️ เปลี่ยนสีพื้นหลัง</div>
+  <div class="menu-item" onclick="location.reload()">🔄 Shut Down / Restart</div>
+</div>
+
+<!-- แถบ Taskbar -->
+<div id="taskbar">
+  <button id="start-btn" onclick="toggleStartMenu()">🪟 Start</button>
+  <div id="task-list"></div>
+  <div id="clock">00:00</div>
+</div>
+
+<script>
+  let topZ = 20;
+  let openApps = {}; // เก็บสถานะหน้าต่างที่เปิดอยู่
+
+  // --- ระบบจัดการหน้าต่าง & Taskbar ---
+  function openWindow(id, title) {
+    closeStartMenu();
+    const win = document.getElementById(id);
+    win.style.display = 'flex';
+    openApps[id] = { title: title, minimized: false };
+    focusWindow(id);
+    renderTaskbar();
+    if(id === 'win-docs') renderFileList();
+    if(id === 'win-mine' && document.getElementById('mine-grid').innerHTML === '') initMinesweeper();
+  }
+
+  function closeWindow(id) {
+    document.getElementById(id).style.display = 'none';
+    delete openApps[id];
+    renderTaskbar();
+  }
+
+  function minimizeWindow(id) {
+    document.getElementById(id).style.display = 'none';
+    if(openApps[id]) openApps[id].minimized = true;
+    renderTaskbar();
+  }
+
+  function focusWindow(id) {
+    document.querySelectorAll('.window').forEach(w => w.classList.remove('active'));
+    const win = document.getElementById(id);
+    if(win) {
+      win.style.display = 'flex';
+      topZ++;
+      win.style.zIndex = topZ;
+      win.classList.add('active');
+      if(openApps[id]) openApps[id].minimized = false;
+      renderTaskbar(id);
+    }
+  }
+
+  function renderTaskbar(activeId) {
+    const list = document.getElementById('task-list');
+    list.innerHTML = '';
+    for (let id in openApps) {
+      const tab = document.createElement('div');
+      tab.className = 'task-tab' + (id === activeId && !openApps[id].minimized ? ' active-tab' : '');
+      tab.innerText = openApps[id].title;
+      tab.onclick = () => {
+        if (openApps[id].minimized) {
+          focusWindow(id);
+        } else if (document.getElementById(id).classList.contains('active')) {
+          minimizeWindow(id);
+        } else {
+          focusWindow(id);
+        }
+      };
+      list.appendChild(tab);
+    }
+  }
+
+  // ระบบลากหน้าต่าง (Drag Window)
+  document.querySelectorAll('.title-bar').forEach(bar => {
+    let isDragging = false, startX, startY, origLeft, origTop;
+    const win = bar.parentElement;
+
+    const startDrag = (e) => {
+      if(e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      focusWindow(win.id);
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      startX = clientX;
+      startY = clientY;
+      origLeft = win.offsetLeft;
+      origTop = win.offsetTop;
+    };
+
+    const onDrag = (e) => {
+      if (!isDragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      win.style.left = (origLeft + (clientX - startX)) + 'px';
+      win.style.top = Math.max(0, origTop + (clientY - startY)) + 'px';
+    };
+
+    const endDrag = () => { isDragging = false; };
+
+    bar.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', endDrag);
+
+    bar.addEventListener('touchstart', startDrag, {passive: true});
+    document.addEventListener('touchmove', onDrag, {passive: true});
+    document.addEventListener('touchend', endDrag);
+  });
+
+  // เมนู Start & นาฬิกา
+  function toggleStartMenu() {
+    const menu = document.getElementById('start-menu');
+    const btn = document.getElementById('start-btn');
+    const isOpen = menu.style.display === 'flex';
+    menu.style.display = isOpen ? 'none' : 'flex';
+    btn.classList.toggle('open', !isOpen);
+  }
+  function closeStartMenu() {
+    document.getElementById('start-menu').style.display = 'none';
+    document.getElementById('start-btn').classList.remove('open');
+  }
+
+  const colors = ['#008080', '#3a6ea5', '#2c3e50', '#1e272e', '#004d40'];
+  let colorIdx = 0;
+  function changeBg() {
+    colorIdx = (colorIdx + 1) % colors.length;
+    document.body.style.background = colors[colorIdx];
+    closeStartMenu();
+  }
+
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').innerText =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // --- 1. ระบบ My Documents & Notepad ---
+  let files = JSON.parse(localStorage.getItem('win95_files')) || {
+    'ยินดีต้อนรับ.txt': 'ยินดีต้อนรับสู่ Windows 95 WebOS v2.0!
+คุณสามารถสร้างไฟล์ใหม่ แก้ไข และบันทึกเก็บไว้ในเครื่องได้เลย'
+  };
+  let currentFileName = 'ยินดีต้อนรับ.txt';
+
+  function saveFilesToStorage() {
+    localStorage.setItem('win95_files', JSON.stringify(files));
+  }
+
+  function renderFileList() {
+    const list = document.getElementById('file-list');
+    list.innerHTML = '';
+    for (let name in files) {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.innerHTML = `
+        <span class="file-name" onclick="openFileInNote('${name}')">📄 ${name}</span>
+        <button class="btn-95" style="padding:2px 6px; font-size:11px;" onclick="deleteFile('${name}')">ลบ</button>
+      `;
+      list.appendChild(row);
+    }
+  }
+
+  function createNewFile() {
+    let name = prompt('ตั้งชื่อไฟล์ใหม่ (เช่น รายการซื้อของ):');
+    if (!name) return;
+    if (!name.endsWith('.txt')) name += '.txt';
+    files[name] = '';
+    saveFilesToStorage();
+    renderFileList();
+    openFileInNote(name);
+  }
+
+  function openNewNote() {
+    openFileInNote(currentFileName in files ? currentFileName : Object.keys(files)[0] || 'บันทึกด่วน.txt');
+  }
+
+  function openFileInNote(name) {
+    currentFileName = name;
+    if (!(name in files)) files[name] = '';
+    document.getElementById('note-title').innerText = '📝 Notepad - ' + name;
+    document.getElementById('current-file-label').innerText = 'ไฟล์: ' + name;
+    document.getElementById('note-text').value = files[name];
+    openWindow('win-note', '📝 ' + name);
+  }
+
+  function saveCurrentNote() {
+    files[currentFileName] = document.getElementById('note-text').value;
+    saveFilesToStorage();
+    renderFileList();
+    alert('บันทึกไฟล์ "' + currentFileName + '" เรียบร้อยแล้ว!');
+  }
+
+  function deleteFile(name) {
+    if (confirm('ต้องการลบไฟล์ "' + name + '" ใช่หรือไม่?')) {
+      delete files[name];
+      saveFilesToStorage();
+      renderFileList();
+    }
+  }
+
+  // --- 2. ระบบ Paint (วาดรูปและเซฟลงมือถือ) ---
+  const canvas = document.getElementById('paint-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let painting = false;
+  let paintColor = '#000000';
+
+  function setPaintColor(color, el) {
+    paintColor = color;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  function startDraw(e) {
+    painting = true;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }
+  function draw(e) {
+    if (!painting) return;
+    const pos = getPos(e);
+    ctx.lineWidth = paintColor === '#ffffff' ? 14 : 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = paintColor;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
+  function endDraw() { painting = false; }
+
+  canvas.addEventListener('mousedown', startDraw);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', endDraw);
+  canvas.addEventListener('touchstart', startDraw, {passive: true});
+  canvas.addEventListener('touchmove', draw, {passive: true});
+  canvas.addEventListener('touchend', endDraw);
+
+  function clearCanvas() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function downloadPainting() {
+    const link = document.createElement('a');
+    link.download = 'my-painting.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  }
+
+  // --- 3. ระบบ Calculator ---
+  let calcStr = '';
+  function calcInput(val) {
+    calcStr += val;
+    document.getElementById('calc-display').innerText = calcStr;
+  }
+  function calcClear() {
+    calcStr = '';
+    document.getElementById('calc-display').innerText = '0';
+  }
+  function calcResult() {
+    try {
+      calcStr = String(eval(calcStr));
+      document.getElementById('calc-display').innerText = calcStr;
+    } catch {
+      document.getElementById('calc-display').innerText = 'Error';
+      calcStr = '';
+    }
+  }
+
+  // --- 4. ระบบ Minesweeper (กู้ระเบิด 8x8) ---
+  let board = [], gameOver = false;
+  function initMinesweeper() {
+    const grid = document.getElementById('mine-grid');
+    grid.innerHTML = '';
+    document.getElementById('mine-reset').innerText = '🙂 เริ่มใหม่';
+    document.getElementById('mine-status').innerText = 'กำลังเล่น';
+    gameOver = false;
+    board = Array(64).fill(0).map(() => ({ mine: false, revealed: false, count: 0 }));
+
+    // วางระเบิด 10 ลูก
+    let placed = 0;
+    while (placed < 10) {
+      let idx = Math.floor(Math.random() * 64);
+      if (!board[idx].mine) { board[idx].mine = true; placed++; }
+    }
+
+    // นับระเบิดรอบข้าง
+    for (let i = 0; i < 64; i++) {
+      if (board[i].mine) continue;
+      let r = Math.floor(i / 8), c = i % 8, count = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          let nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr * 8 + nc].mine) count++;
+        }
+      }
+      board[i].count = count;
+    }
+
+    // วาดตาราง
+    for (let i = 0; i < 64; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mine-cell';
+      cell.id = 'cell-' + i;
+      cell.onclick = () => revealCell(i);
+      grid.appendChild(cell);
+    }
+  }
+
+  function revealCell(idx) {
+    if (gameOver || board[idx].revealed) return;
+    board[idx].revealed = true;
+    const cell = document.getElementById('cell-' + idx);
+    cell.classList.add('revealed');
+
+    if (board[idx].mine) {
+      cell.innerText = '💥';
+      cell.style.background = '#ff3b30';
+      document.getElementById('mine-reset').innerText = '😵 แพ้แล้ว';
+      document.getElementById('mine-status').innerText = 'ระเบิดทำงาน!';
+      gameOver = true;
+      board.forEach((b, i) => {
+        if (b.mine && i !== idx) {
+          const c = document.getElementById('cell-' + i);
+          c.classList.add('revealed');
+          c.innerText = '💣';
+        }
+      });
+      return;
+    }
+
+    const numColors = ['', '#0000ff', '#008000', '#ff0000', '#000080', '#800000', '#008080', '#000', '#808080'];
+    if (board[idx].count > 0) {
+      cell.innerText = board[idx].count;
+      cell.style.color = numColors[board[idx].count];
+    } else {
+      let r = Math.floor(idx / 8), c = idx % 8;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          let nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) revealCell(nr * 8 + nc);
+        }
+      }
+    }
+
+    // เช็กชนะ
+    if (board.filter(b => !b.mine && !b.revealed).length === 0) {
+      document.getElementById('mine-reset').innerText = '😎 ชนะ!';
+      document.getElementById('mine-status').innerText = 'เคลียร์พื้นที่สำเร็จ';
+      gameOver = true;
+    }
+  }
+</script>
+</body>
+</html>

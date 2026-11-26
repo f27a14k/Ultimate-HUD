@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RC Auto-Channel Remote (CH 01-99)</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  * { box-sizing: border-box; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  body, html {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #12151a; color: #e2e8f0; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* Header & Tuner Bar */
+  .header {
+    background: #1e242b; border-bottom: 2px solid #2d3748;
+    padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: center; justify-content: space-between; z-index: 20;
+  }
+  .brand { font-weight: bold; font-size: 15px; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+  .status-badge {
+    padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;
+    background: #334155; color: #94a3b8; display: flex; align-items: center; gap: 6px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+  .status-badge.online { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+  .status-badge.online .status-dot { background: #10b981; box-shadow: 0 0 8px #10b981; }
+  .status-badge.searching { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+  .status-badge.searching .status-dot { background: #f59e0b; animation: blink 1s infinite; }
+
+  @keyframes blink { 50% { opacity: 0.2; } }
+
+  /* Setup Panel */
+  #setup-panel {
+    background: #1a202c; padding: 14px; border-bottom: 1px solid #2d3748;
+    display: flex; flex-direction: column; gap: 10px; z-index: 15;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .control-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 110px; }
+  .control-group label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+  input, select {
+    background: #0f172a; border: 1px solid #334155; color: #f8fafc;
+    padding: 8px 10px; border-radius: 6px; font-size: 14px; font-weight: bold;
+    user-select: text; outline: none;
+  }
+  input:focus, select:focus { border-color: #38bdf8; }
+
+  .role-btns { display: flex; gap: 8px; }
+  .role-btn {
+    flex: 1; padding: 10px; border-radius: 8px; border: 2px solid #334155;
+    background: #0f172a; color: #94a3b8; font-weight: bold; font-size: 13px; cursor: pointer;
+    text-align: center; transition: 0.15s;
+  }
+  .role-btn.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+  .power-btn {
+    background: linear-gradient(135deg, #0284c7, #2563eb); color: white;
+    border: none; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 14px;
+    cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  }
+  .power-btn.stop { background: linear-gradient(135deg, #dc2626, #991b1b); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); }
+
+  /* Workspace */
+  .workspace { flex: 1; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Controller View */
+  #controller-view {
+    flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 12px;
+  }
+  .switches {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .sw-btn {
+    background: #1e293b; border: 2px solid #334155; color: #cbd5e1;
+    padding: 10px 4px; border-radius: 8px; font-size: 12px; font-weight: bold;
+    cursor: pointer; text-align: center;
+  }
+  .sw-btn.on { background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; }
+  .sw-btn.horn:active { background: #f59e0b; color: #000; border-color: #fbbf24; }
+  .sw-btn.estop { border-color: #ef4444; color: #f87171; }
+  .sw-btn.estop.on { background: #ef4444; color: white; }
+
+  .telemetry-bar {
+    background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
+    padding: 8px 12px; font-family: monospace; font-size: 12px; color: #38bdf8;
+    display: flex; justify-content: space-between;
+  }
+
+  .joysticks {
+    display: flex; justify-content: space-around; align-items: center; flex: 1; gap: 16px;
+  }
+  .joy-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .joy-label { font-size: 11px; color: #94a3b8; font-weight: bold; }
+  .joy-base {
+    width: 135px; height: 135px; border-radius: 50%;
+    background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+    border: 3px solid #334155; position: relative; touch-action: none;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+  }
+  .joy-stick {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #38bdf8, #0284c7);
+    border: 2px solid #bae6fd; position: absolute;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.6); pointer-events: none;
+  }
+
+  /* Rover View */
+  #rover-view {
+    flex: 1; display: none; flex-direction: column; position: relative; background: #090d16;
+  }
+  #arena {
+    flex: 1; position: relative; overflow: hidden;
+    background-image: linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+  #robot {
+    width: 54px; height: 68px; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(0deg);
+    background: #3b82f6; border: 3px solid #93c5fd; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 4px; box-shadow: 0 6px 16px rgba(0,0,0,0.7);
+  }
+  .headlight {
+    width: 100%; height: 8px; display: flex; justify-content: space-between;
+  }
+  .bulb { width: 10px; height: 6px; background: #475569; border-radius: 2px; }
+  .bulb.on { background: #fef08a; box-shadow: 0 -18px 25px 8px rgba(254, 240, 138, 0.75); }
+  #turret {
+    width: 24px; height: 24px; background: #1e293b; border: 2px solid #38bdf8;
+    border-radius: 50%; position: relative; display: flex; justify-content: center;
+  }
+  #turret::after {
+    content: ''; width: 4px; height: 14px; background: #38bdf8; position: absolute; top: -6px; border-radius: 2px;
+  }
+  #estop-banner {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: #ef4444; color: white; padding: 6px 16px; border-radius: 20px;
+    font-weight: bold; font-size: 13px; display: none; z-index: 10;
+  }
+  .rover-log {
+    background: #0f172a; border-top: 1px solid #1e293b; padding: 8px 12px;
+    font-family: monospace; font-size: 12px; color: #34d399;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">📡 RC AUTO-CHANNEL</div>
+  <div class="status-badge" id="status-badge">
+    <div class="status-dot"></div>
+    <span id="status-text">OFFLINE</span>
+  </div>
+</div>
+
+<div id="setup-panel">
+  <div class="role-btns">
+    <div class="role-btn active" id="btn-role-ctrl" onclick="setRole('controller')">🎮 รีโมทบังคับ (Controller)</div>
+    <div class="role-btn" id="btn-role-rover" onclick="setRole('rover')">🤖 ตัวหุ่นยนต์ (Rover)</div>
+  </div>
+  <div class="row">
+    <div class="control-group">
+      <label>รหัสลับส่วนตัว (Secret PIN)</label>
+      <input type="text" id="secret-pin" value="8899" maxlength="12" placeholder="เช่น 8899">
+    </div>
+    <div class="control-group">
+      <label>ช่องสัญญาณ (Channel)</label>
+      <select id="channel-select"></select>
+    </div>
+  </div>
+  <button class="power-btn" id="power-btn" onclick="togglePower()">⚡ เปิดเครื่อง & จูนช่องสัญญาณ</button>
+</div>
+
+<div class="workspace">
+  <!-- Controller UI -->
+  <div id="controller-view">
+    <div class="switches">
+      <button class="sw-btn" id="sw-led" onclick="toggleSwitch('led')">🔦 ไฟหน้า: OFF</button>
+      <button class="sw-btn horn" onpointerdown="sendHorn(true)" onpointerup="sendHorn(false)">📢 แตร</button>
+      <button class="sw-btn" id="sw-turbo" onclick="toggleSwitch('turbo')">🚀 เทอร์โบ: OFF</button>
+      <button class="sw-btn estop" id="sw-estop" onclick="toggleSwitch('estop')">🛑 E-STOP</button>
+    </div>
+
+    <div class="telemetry-bar">
+      <span id="tel-drive">DRIVE: X=0 Y=0</span>
+      <span id="tel-cam">CAM: X=0 Y=0</span>
+    </div>
+
+    <div class="joysticks">
+      <div class="joy-wrap">
+        <div class="joy-base" id="joy-left">
+          <div class="joy-stick" id="stick-left"></div>
+        </div>
+        <div class="joy-label">ขับเคลื่อน (Drive)</div>
+      </div>
+      <div class="joy-wrap">
+        <div class="joy-base" id="joy-right">
+          <div class="joy-stick" id="stick-right"></div>
+        </div>
+        <div class="joy-label">หมุนกล้อง (Camera)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rover UI -->
+  <div id="rover-view">
+    <div id="estop-banner">🛑 EMERGENCY STOP ACTIVE</div>
+    <div id="arena">
+      <div id="robot">
+        <div class="headlight">
+          <div class="bulb" id="bulb-l"></div>
+          <div class="bulb" id="bulb-r"></div>
+        </div>
+        <div id="turret"></div>
+        <div style="font-size:10px; font-weight:bold; color:#dbeafe;">ROVER</div>
+      </div>
+    </div>
+    <div class="rover-log" id="rover-log">รอรับสัญญาณจากรีโมท...</div>
+  </div>
+</div>
+
+<script>
+  // Populate CH-01 to CH-99
+  const chSelect = document.getElementById('channel-select');
+  for (let i = 1; i <= 99; i++) {
+    const ch = 'CH-' + String(i).padStart(2, '0');
+    const opt = document.createElement('option');
+    opt.value = ch;
+    opt.innerText = ch;
+    chSelect.appendChild(opt);
+  }
+
+  let role = 'controller';
+  let isPowered = false;
+  let peer = null;
+  let conn = null;
+  let retryTimer = null;
+
+  const state = {
+    moveX: 0, moveY: 0,
+    camX: 0, camY: 0,
+    led: false, turbo: false, estop: false, horn: false
+  };
+
+  function setRole(newRole) {
+    if (isPowered) return;
+    role = newRole;
+    document.getElementById('btn-role-ctrl').classList.toggle('active', role === 'controller');
+    document.getElementById('btn-role-rover').classList.toggle('active', role === 'rover');
+    document.getElementById('controller-view').style.display = role === 'controller' ? 'flex' : 'none';
+    document.getElementById('rover-view').style.display = role === 'rover' ? 'flex' : 'none';
+  }
+
+  function setStatus(type, text) {
+    const badge = document.getElementById('status-badge');
+    badge.className = 'status-badge ' + type;
+    document.getElementById('status-text').innerText = text;
+  }
+
+  function togglePower() {
+    if (!isPowered) {
+      startSystem();
+    } else {
+      stopSystem();
+    }
+  }
+
+  function startSystem() {
+    const pin = document.getElementById('secret-pin').value.trim().replace(/[^a-zA-Z0-9]/g, '') || '0000';
+    const ch = document.getElementById('channel-select').value;
+    const baseId = `rc-webos-${pin}-${ch}`;
+    const myId = role === 'rover' ? `${baseId}-rover` : `${baseId}-ctrl-${Math.floor(Math.random()*9000+1000)}`;
+    const targetId = `${baseId}-rover`;
+
+    isPowered = true;
+    document.getElementById('secret-pin').disabled = true;
+    document.getElementById('channel-select').disabled = true;
+    const pBtn = document.getElementById('power-btn');
+    pBtn.innerText = '🔌 ปิดเครื่อง (ตัดการเชื่อมต่อ)';
+    pBtn.classList.add('stop');
+
+    setStatus('searching', `TUNING ${ch}...`);
+
+    peer = new Peer(myId, {
+      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+    });
+
+    peer.on('open', () => {
+      if (role === 'rover') {
+        setStatus('searching', `WAITING ON ${ch}`);
+      } else {
+        connectToRover(targetId, ch);
+      }
+    });
+
+    peer.on('connection', (incomingConn) => {
+      if (conn) conn.close();
+      conn = incomingConn;
+      setupConnectionEvents(ch);
+    });
+
+    peer.on('error', (err) => {
+      if (err.type === 'peer-unavailable' && role === 'controller' && isPowered) {
+        setStatus('searching', `SEARCHING ${ch}...`);
+      } else if (err.type === 'unavailable-id') {
+        alert('ช่องสัญญาณนี้มีตัวหุ่นยนต์เปิดใช้งานอยู่แล้ว กรุณาเปลี่ยนช่องสัญญาณหรือรหัส PIN');
+        stopSystem();
+      }
+    });
+  }
+
+  function connectToRover(targetId, ch) {
+    if (!isPowered) return;
+    const attempt = () => {
+      if (!isPowered || (conn && conn.open)) return;
+      conn = peer.connect(targetId, { reliable: false });
+      setupConnectionEvents(ch);
+    };
+    attempt();
+    retryTimer = setInterval(attempt, 2500);
+  }
+
+  function setupConnectionEvents(ch) {
+    conn.on('open', () => {
+      if (retryTimer) clearInterval(retryTimer);
+      setStatus('online', `ONLINE (${ch})`);
+      if (role === 'controller') sendTelemetry();
+    });
+
+    conn.on('data', (data) => {
+      if (role === 'rover') {
+        applyRoverData(data);
+      }
+    });
+
+    conn.on('close', () => {
+      setStatus('searching', `LOST SIGNAL (${ch})`);
+      if (role === 'controller' && isPowered) {
+        const pin = document.getElementById('secret-pin').value.trim().replace(/[^a-zA-Z0-9]/g, '') || '0000';
+        connectToRover(`rc-webos-${pin}-${ch}-rover`, ch);
+      }
+    });
+  }
+
+  function stopSystem() {
+    isPowered = false;
+    if (retryTimer) clearInterval(retryTimer);
+    if (conn) conn.close();
+    if (peer) peer.destroy();
+    conn = null; peer = null;
+
+    document.getElementById('secret-pin').disabled = false;
+    document.getElementById('channel-select').disabled = false;
+    const pBtn = document.getElementById('power-btn');
+    pBtn.innerText = '⚡ เปิดเครื่อง & จูนช่องสัญญาณ';
+    pBtn.classList.remove('stop');
+    setStatus('', 'OFFLINE');
+  }
+
+  // Controller Switches
+  function toggleSwitch(key) {
+    state[key] = !state[key];
+    if (key === 'led') {
+      const btn = document.getElementById('sw-led');
+      btn.classList.toggle('on', state.led);
+      btn.innerText = state.led ? '🔦 ไฟหน้า: ON' : '🔦 ไฟหน้า: OFF';
+    } else if (key === 'turbo') {
+      const btn = document.getElementById('sw-turbo');
+      btn.classList.toggle('on', state.turbo);
+      btn.innerText = state.turbo ? '🚀 เทอร์โบ: ON' : '🚀 เทอร์โบ: OFF';
+    } else if (key === 'estop') {
+      const btn = document.getElementById('sw-estop');
+      btn.classList.toggle('on', state.estop);
+    }
+    sendTelemetry();
+  }
+
+  function sendHorn(active) {
+    state.horn = active;
+    sendTelemetry();
+  }
+
+  function sendTelemetry() {
+    document.getElementById('tel-drive').innerText = `DRIVE: X=${state.moveX} Y=${state.moveY}`;
+    document.getElementById('tel-cam').innerText = `CAM: X=${state.camX} Y=${state.camY}`;
+    if (conn && conn.open) {
+      conn.send(state);
+    }
+  }
+
+  // Dual Joysticks Logic
+  function setupJoystick(baseId, stickId, onMove) {
+    const base = document.getElementById(baseId);
+    const stick = document.getElementById(stickId);
+    let dragging = false;
+    const maxR = 42;
+
+    function handleMove(clientX, clientY) {
+      const rect = base.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      let dx = clientX - cx;
+      let dy = clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > maxR) {
+        dx = (dx / dist) * maxR;
+        dy = (dy / dist) * maxR;
+      }
+      stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      const normX = Math.round((dx / maxR) * 100);
+      const normY = Math.round((-dy / maxR) * 100);
+      onMove(normX, normY);
+    }
+
+    base.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      base.setPointerCapture(e.pointerId);
+      handleMove(e.clientX, e.clientY);
+    });
+    base.addEventListener('pointermove', (e) => {
+      if (dragging) handleMove(e.clientX, e.clientY);
+    });
+    const reset = () => {
+      if (!dragging) return;
+      dragging = false;
+      stick.style.transform = 'translate(-50%, -50%)';
+      onMove(0, 0);
+    };
+    base.addEventListener('pointerup', reset);
+    base.addEventListener('pointercancel', reset);
+  }
+
+  setupJoystick('joy-left', 'stick-left', (x, y) => {
+    state.moveX = x; state.moveY = y;
+    sendTelemetry();
+  });
+  setupJoystick('joy-right', 'stick-right', (x, y) => {
+    state.camX = x; state.camY = y;
+    sendTelemetry();
+  });
+
+  // Rover Simulation Physics
+  let rx = null, ry = null, rAngle = 0;
+  let latestCmd = { moveX: 0, moveY: 0, camX: 0, camY: 0, led: false, turbo: false, estop: false, horn: false };
+  let audioCtx = null;
+
+  function playBeep() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 420;
+      gain.gain.value = 0.1;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      setTimeout(() => osc.stop(), 120);
+    } catch(e) {}
+  }
+
+  function applyRoverData(cmd) {
+    if (cmd.horn && !latestCmd.horn) playBeep();
+    latestCmd = cmd;
+
+    document.getElementById('bulb-l').classList.toggle('on', cmd.led);
+    document.getElementById('bulb-r').classList.toggle('on', cmd.led);
+    document.getElementById('estop-banner').style.display = cmd.estop ? 'block' : 'none';
+    document.getElementById('turret').style.transform = `rotate(${cmd.camX * 0.9}deg)`;
+    document.getElementById('rover-log').innerText =
+      `CMD >> SPD:${cmd.moveY}% | TURN:${cmd.moveX}% | CAM:${cmd.camX}° | LED:${cmd.led?'ON':'OFF'}`;
+  }
+
+  function roverLoop() {
+    if (role === 'rover') {
+      const arena = document.getElementById('arena');
+      const robot = document.getElementById('robot');
+      if (rx === null && arena.clientWidth > 0) {
+        rx = arena.clientWidth / 2;
+        ry = arena.clientHeight / 2;
+      }
+      if (rx !== null && !latestCmd.estop) {
+        const mult = latestCmd.turbo ? 1.8 : 1.0;
+        rAngle += (latestCmd.moveX / 100) * 3.5;
+        const rad = (rAngle - 90) * (Math.PI / 180);
+        const speed = (latestCmd.moveY / 100) * 3.2 * mult;
+        rx += Math.cos(rad) * speed;
+        ry += Math.sin(rad) * speed;
+
+        rx = Math.max(30, Math.min(arena.clientWidth - 30, rx));
+        ry = Math.max(35, Math.min(arena.clientHeight - 35, ry));
+
+        robot.style.left = rx + 'px';
+        robot.style.top = ry + 'px';
+        robot.style.transform = `translate(-50%, -50%) rotate(${rAngle}deg)`;
+      }
+    }
+    requestAnimationFrame(roverLoop);
+  }
+  requestAnimationFrame(roverLoop);
+</script>
+</body>
+</html>

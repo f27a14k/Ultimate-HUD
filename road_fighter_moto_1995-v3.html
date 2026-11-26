@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Road Fighter Moto 1995</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #0d1117;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    font-size: 13px;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+  .hud span { color: #ffd166; }
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.1fr 1.1fr;
+    gap: 8px;
+    padding: 10px 10px 14px;
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    flex-shrink: 0;
+  }
+  .btn {
+    height: 56px;
+    border-radius: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: #21262d;
+    color: #fff;
+    font-size: 15px;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+  .btn:active, .btn.active {
+    background: #388bfd;
+    border-color: #79c0ff;
+    transform: scale(0.95);
+  }
+  .btn-wheelie { border-color: #ffd166; color: #ffd166; }
+  .btn-wheelie:active, .btn-wheelie.active { background: #d97706; color: #fff; }
+  .btn-bash { border-color: #ff4d6d; color: #ff4d6d; }
+  .btn-bash:active, .btn-bash.active { background: #e11d48; color: #fff; }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 17, 23, 0.86);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    z-index: 20;
+  }
+  .overlay h1 {
+    font-size: 24px;
+    color: #ffd166;
+    text-shadow: 0 0 15px rgba(255, 209, 102, 0.6);
+    margin-bottom: 8px;
+  }
+  .overlay p {
+    font-size: 14px;
+    color: #c9d1d9;
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+  .start-btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 25px;
+    background: linear-gradient(135deg, #ffd166, #f77f00);
+    color: #0d1117;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(247, 127, 0, 0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div>SPEED: <span id="speedEl">0</span> km/h</div>
+  <div>KNOCKOUT: <span id="koEl">0</span></div>
+  <div>SCORE: <span id="scoreEl">0</span></div>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="game"></canvas>
+  <div class="overlay" id="overlay">
+    <h1>🏍️ ROAD FIGHTER MOTO 1995</h1>
+    <p>ขับซิ่งปาดหน้า เบียดคู่แข่งให้ล้มข้างทาง!<br>กด <b>ยกล้อ</b> เก็บแต้มคูณ และ <b>เหินเนิน</b> ข้ามสิ่งกีดขวาง</p>
+    <button class="start-btn" id="startBtn">บิดคันเร่งออกตัว!</button>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="btn" id="btnLeft">◀<span style="font-size:11px;">ซ้าย</span></div>
+  <div class="btn" id="btnRight">▶<span style="font-size:11px;">ขวา</span></div>
+  <div class="btn btn-wheelie" id="btnWheelie">🏍️<span style="font-size:11px;">ยกล้อ</span></div>
+  <div class="btn btn-bash" id="btnBash">💥<span style="font-size:11px;">เบียด/ถีบ</span></div>
+</div>
+
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const speedEl = document.getElementById('speedEl');
+  const koEl = document.getElementById('koEl');
+  const scoreEl = document.getElementById('scoreEl');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+
+  let W = 360, H = 520;
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = canvas.width = Math.max(300, Math.floor(rect.width));
+    H = canvas.height = Math.max(300, Math.floor(rect.height));
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Web Audio API - เสียงเครื่องยนต์และเอฟเฟกต์
+  let audioCtx = null;
+  function playSound(freq1, freq2, dur, type = 'sawtooth', vol = 0.1) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq1, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq2, audioCtx.currentTime + dur);
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    } catch (e) {}
+  }
+
+  // สถานะเกม
+  let running = false;
+  let score = 0;
+  let koCount = 0;
+  let trackPos = 0;
+  let roadCurve = 0;
+  let targetCurve = 0;
+  let frame = 0;
+
+  let player = {
+    x: 0,           // ตำแหน่งบนถนน (-1 ถึง 1)
+    y: 0,           // ความสูงตอนเหินเนิน
+    vy: 0,
+    speed: 0,
+    maxSpeed: 210,
+    wheelie: false,
+    bashTimer: 0,
+    bashDir: 0,
+    invuln: 0
+  };
+
+  let rivals = [];
+  let ramps = [];
+  let sparks = [];
+
+  const keys = { left: false, right: false, wheelie: false };
+
+  function bindBtn(id, keyName) {
+    const el = document.getElementById(id);
+    const down = (e) => { e.preventDefault(); keys[keyName] = true; el.classList.add('active'); };
+    const up = (e) => { e.preventDefault(); keys[keyName] = false; el.classList.remove('active'); };
+    el.addEventListener('touchstart', down, { passive: false });
+    el.addEventListener('touchend', up, { passive: false });
+    el.addEventListener('mousedown', down);
+    el.addEventListener('mouseup', up);
+    el.addEventListener('mouseleave', up);
+  }
+  bindBtn('btnLeft', 'left');
+  bindBtn('btnRight', 'right');
+  bindBtn('btnWheelie', 'wheelie');
+
+  function triggerBash(e) {
+    if (e) e.preventDefault();
+    if (!running || player.bashTimer > 0) return;
+    player.bashTimer = 14;
+    player.bashDir = keys.left ? -1 : (keys.right ? 1 : (player.x > 0 ? -1 : 1));
+    playSound(220, 90, 0.14, 'square', 0.14);
+  }
+  const btnBash = document.getElementById('btnBash');
+  btnBash.addEventListener('touchstart', triggerBash, { passive: false });
+  btnBash.addEventListener('mousedown', triggerBash);
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+    if (e.key === 'ArrowUp' || e.key === 'w') keys.wheelie = true;
+    if (e.key === ' ' || e.key === 'z') triggerBash();
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+    if (e.key === 'ArrowUp' || e.key === 'w') keys.wheelie = false;
+  });
+
+  function resetGame() {
+    score = 0;
+    koCount = 0;
+    trackPos = 0;
+    roadCurve = 0;
+    targetCurve = 0;
+    frame = 0;
+    player = { x: 0, y: 0, vy: 0, speed: 90, maxSpeed: 220, wheelie: false, bashTimer: 0, bashDir: 0, invuln: 0 };
+    rivals = [];
+    ramps = [];
+    sparks = [];
+    running = true;
+    overlay.style.display = 'none';
+    playSound(140, 420, 0.28, 'sawtooth', 0.14);
+  }
+  startBtn.addEventListener('click', resetGame);
+
+  function addSparks(sx, sy, color = '#ffd166', count = 14) {
+    for (let i = 0; i < count; i++) {
+      sparks.push({
+        x: sx, y: sy,
+        vx: (Math.random() - 0.5) * 10,
+        vy: (Math.random() - 0.8) * 9,
+        life: 22,
+        color
+      });
+    }
+  }
+
+  function update() {
+    if (!running) return;
+    frame++;
+
+    // เร่งความเร็วอัตโนมัติ
+    const targetSpd = player.wheelie ? player.maxSpeed + 25 : player.maxSpeed;
+    player.speed += (targetSpd - player.speed) * 0.02;
+    trackPos += player.speed * 0.18;
+
+    // โค้งถนนสุ่มเปลี่ยนเป็นระยะ
+    if (frame % 180 === 0) {
+      targetCurve = (Math.random() - 0.5) * 1.4;
+    }
+    roadCurve += (targetCurve - roadCurve) * 0.015;
+
+    // แรงเหวี่ยงโค้ง + การบังคับซ้ายขวา
+    player.x -= roadCurve * (player.speed / 220) * 0.012;
+    const steerSpd = 0.036;
+    if (keys.left) player.x -= steerSpd;
+    if (keys.right) player.x += steerSpd;
+
+    // จังหวะเบียด/ถีบด้านข้าง
+    if (player.bashTimer > 0) {
+      player.x += player.bashDir * 0.045;
+      player.bashTimer--;
+    }
+
+    // ยกล้อหน้า (ทำได้เฉพาะตอนล้อติดพื้น)
+    player.wheelie = keys.wheelie && player.y === 0;
+
+    // ฟิสิกส์เหินเนิน (แกน Y)
+    if (player.y > 0 || player.vy > 0) {
+      player.y += player.vy;
+      player.vy -= 0.75;
+      if (player.y <= 0) {
+        player.y = 0;
+        player.vy = 0;
+        playSound(110, 60, 0.1, 'triangle', 0.12);
+      }
+    }
+
+    if (player.invuln > 0) player.invuln--;
+
+    // ตกขอบถนน -> ความเร็วตกและกระเด้งกลับ
+    if (Math.abs(player.x) > 1.05) {
+      player.speed = Math.max(70, player.speed - 4);
+      player.x = Math.sign(player.x) * 1.05;
+      if (frame % 6 === 0) addSparks(W / 2 + player.x * (W * 0.35), H - 75, '#a3e635', 4);
+    }
+
+    // คะแนนเพิ่มตามความเร็ว และคูณ 2 ตอนยกล้อ
+    score += Math.floor((player.speed / 45) * (player.wheelie ? 2.5 : 1));
+    speedEl.textContent = Math.floor(player.speed);
+    koEl.textContent = koCount;
+    scoreEl.textContent = score;
+
+    // เสียงเครื่องยนต์เบา ๆ ตามจังหวะ
+    if (frame % 10 === 0) {
+      const engFreq = 55 + (player.speed / 220) * 75 + (player.wheelie ? 25 : 0);
+      playSound(engFreq, engFreq + 8, 0.08, 'sawtooth', 0.025);
+    }
+
+    // ปล่อยเนินกระโดด (Ramps)
+    if (frame % 140 === 0) {
+      ramps.push({
+        x: (Math.random() - 0.5) * 1.2,
+        z: 1.0 // 1.0 = ขอบฟ้าไกลสุด, 0.0 = ถึงตัวผู้เล่น
+      });
+    }
+
+    // ปล่อยรถคู่แข่ง (Rivals)
+    if (frame % 65 === 0 && rivals.length < 5) {
+      const colors = ['#ff4d6d', '#00bbf9', '#9b5de5', '#00f5d4'];
+      rivals.push({
+        x: (Math.random() - 0.5) * 1.3,
+        z: 1.0,
+        speed: 110 + Math.random() * 55,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        crashed: false,
+        vx: 0,
+        vy: 0,
+        spin: 0
+      });
+    }
+
+    // อัปเดตเนินกระโดด
+    for (let i = ramps.length - 1; i >= 0; i--) {
+      const r = ramps[i];
+      r.z -= (player.speed * 0.00014);
+      if (r.z <= 0.14 && r.z >= 0.05 && player.y === 0) {
+        if (Math.abs(player.x - r.x) < 0.28) {
+          player.vy = 13.5;
+          score += 150;
+          playSound(240, 680, 0.25, 'sine', 0.15);
+          addSparks(W / 2 + player.x * (W * 0.35), H - 70, '#ffd166', 12);
+          ramps.splice(i, 1);
+          continue;
+        }
+      }
+      if (r.z < -0.05) ramps.splice(i, 1);
+    }
+
+    // อัปเดตคู่แข่งและการชน/เบียด
+    for (let i = rivals.length - 1; i >= 0; i--) {
+      const rv = rivals[i];
+      if (rv.crashed) {
+        rv.x += rv.vx;
+        rv.z -= 0.015;
+        rv.spin += 0.3;
+        if (rv.z < -0.1) rivals.splice(i, 1);
+        continue;
+      }
+
+      const relSpeed = (player.speed - rv.speed) * 0.00014;
+      rv.z -= relSpeed;
+
+      // เช็กการชนที่ระยะใกล้ตัวผู้เล่น (z ~ 0.06 - 0.14)
+      if (rv.z <= 0.14 && rv.z >= 0.05 && player.y < 22) {
+        const dist = Math.abs(player.x - rv.x);
+        if (dist < 0.22) {
+          const sx = W / 2 + rv.x * (W * 0.36);
+          const sy = H - 80;
+          // ถ้ากำลังกดเบียด/ถีบ หรือปาดหน้าด้วยความเร็วสูง -> คู่แข่งล้ม!
+          if (player.bashTimer > 0 || player.speed > rv.speed + 45) {
+            rv.crashed = true;
+            rv.vx = (rv.x >= player.x ? 1 : -1) * 0.06;
+            koCount++;
+            score += 300;
+            playSound(320, 70, 0.3, 'sawtooth', 0.18);
+            addSparks(sx, sy, '#ffbe0b', 20);
+          } else if (player.invuln === 0) {
+            // โดนคู่แข่งชนตรง ๆ โดยไม่ได้เบียด -> เสียหลักความเร็วตก (และล้มถ้ากำลังยกล้อ!)
+            if (player.wheelie) {
+              // ล้มคว่ำ! จบเกม
+              running = false;
+              playSound(160, 40, 0.5, 'sawtooth', 0.22);
+              overlay.innerHTML = `
+                <h1 style="color:#ff4d6d;">💥 รถล้มขณะยกล้อ!</h1>
+                <p>เบียดคู่แข่งล้มไป: <b>${koCount} คัน</b><br>คะแนนรวม: <b style="color:#ffd166;font-size:20px;">${score}</b></p>
+                <button class="start-btn" onclick="resetGame()">ซิ่งใหม่อีกครั้ง</button>
+              `;
+              overlay.style.display = 'flex';
+              return;
+            } else {
+              player.speed = Math.max(65, player.speed - 75);
+              player.invuln = 45;
+              player.x += (player.x >= rv.x ? 0.25 : -0.25);
+              playSound(150, 60, 0.25, 'square', 0.16);
+              addSparks(sx, sy, '#ff4d6d', 15);
+            }
+          }
+        }
+      }
+
+      if (rv.z < -0.15 || rv.z > 1.2) rivals.splice(i, 1);
+    }
+
+    // อัปเดตสะเก็ดไฟ
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vy += 0.4;
+      s.life--;
+      if (s.life <= 0) sparks.splice(i, 1);
+    }
+  }
+
+  function draw() {
+    const horizonY = H * 0.34;
+
+    // 1. ท้องฟ้าไล่เฉดสีพระอาทิตย์ตก
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+    skyGrad.addColorStop(0, '#1e1b4b');
+    skyGrad.addColorStop(0.6, '#7c2d12');
+    skyGrad.addColorStop(1, '#f59e0b');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    // ดวงอาทิตย์ย้อนยุค
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(W * 0.5 + roadCurve * 40, horizonY - 22, 34, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ภูเขาฉากหลัง
+    ctx.fillStyle = '#31102f';
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    ctx.lineTo(W * 0.25, horizonY - 35);
+    ctx.lineTo(W * 0.55, horizonY - 15);
+    ctx.lineTo(W * 0.82, horizonY - 42);
+    ctx.lineTo(W, horizonY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. วาดพื้นหญ้าและถนน Pseudo-3D ทีละแถบแนวนอน
+    const roadH = H - horizonY;
+    const strips = 45;
+    const stripH = roadH / strips;
+
+    for (let i = 0; i < strips; i++) {
+      const p1 = i / strips;         // 0 = ขอบฟ้า, 1 = ล่างสุด
+      const p2 = (i + 1) / strips;
+      const y1 = horizonY + p1 * roadH;
+      const y2 = horizonY + p2 * roadH + 1;
+
+      // สลับสีแถบหญ้าและขอบทางตามระยะวิ่ง (สร้างภาพลวงตาความเร็ว)
+      const stripeIdx = Math.floor((1 / (p1 + 0.08)) * 1.4 + trackPos * 0.08);
+      const isAlt = stripeIdx % 2 === 0;
+
+      // พื้นหญ้าข้างทาง
+      ctx.fillStyle = isAlt ? '#15803d' : '#166534';
+      ctx.fillRect(0, y1, W, y2 - y1);
+
+      // คำนวณจุดกึ่งกลางถนนที่โค้งตาม roadCurve
+      const curveOffset1 = roadCurve * Math.pow(1 - p1, 2) * (W * 0.45);
+      const curveOffset2 = roadCurve * Math.pow(1 - p2, 2) * (W * 0.45);
+      const cx1 = W / 2 + curveOffset1;
+      const cx2 = W / 2 + curveOffset2;
+
+      const rw1 = (W * 0.06) + p1 * (W * 0.42);
+      const rw2 = (W * 0.06) + p2 * (W * 0.42);
+
+      // ขอบถนนขาว-แดง (Rumble Strips)
+      const border1 = rw1 * 1.09;
+      const border2 = rw2 * 1.09;
+      ctx.fillStyle = isAlt ? '#ef4444' : '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(cx1 - border1, y1);
+      ctx.lineTo(cx1 + border1, y1);
+      ctx.lineTo(cx2 + border2, y2);
+      ctx.lineTo(cx2 - border2, y2);
+      ctx.closePath();
+      ctx.fill();
+
+      // พื้นถนนยางมะตอย
+      ctx.fillStyle = isAlt ? '#334155' : '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(cx1 - rw1, y1);
+      ctx.lineTo(cx1 + rw1, y1);
+      ctx.lineTo(cx2 + rw2, y2);
+      ctx.lineTo(cx2 - rw2, y2);
+      ctx.closePath();
+      ctx.fill();
+
+      // เส้นประแบ่งเลนกลางถนน
+      if (isAlt) {
+        const lw1 = Math.max(1, rw1 * 0.03);
+        const lw2 = Math.max(1.5, rw2 * 0.03);
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.moveTo(cx1 - lw1, y1);
+        ctx.lineTo(cx1 + lw1, y1);
+        ctx.lineTo(cx2 + lw2, y2);
+        ctx.lineTo(cx2 - lw2, y2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // ฟังก์ชันช่วยหาพิกัดบนหน้าจอของวัตถุบนถนน (z: 0=ใกล้, 1=ไกล)
+    function getRoadScreenPos(rx, rz) {
+      const p = 1 - rz;
+      const sy = horizonY + p * roadH;
+      const curveOffset = roadCurve * Math.pow(1 - p, 2) * (W * 0.45);
+      const rw = (W * 0.06) + p * (W * 0.42);
+      const sx = (W / 2 + curveOffset) + rx * rw * 0.85;
+      const scale = 0.2 + p * 0.95;
+      return { x: sx, y: sy, scale };
+    }
+
+    // 3. วาดเนินกระโดด (Ramps)
+    ramps.forEach(r => {
+      if (r.z < 0 || r.z > 1) return;
+      const pos = getRoadScreenPos(r.x, r.z);
+      const w = 54 * pos.scale;
+      const h = 24 * pos.scale;
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.moveTo(pos.x - w / 2, pos.y);
+      ctx.lineTo(pos.x - w / 3, pos.y - h);
+      ctx.lineTo(pos.x + w / 3, pos.y - h);
+      ctx.lineTo(pos.x + w / 2, pos.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2 * pos.scale;
+      ctx.stroke();
+    });
+
+    // 4. วาดรถคู่แข่ง (Rivals)
+    rivals.sort((a, b) => b.z - a.z);
+    rivals.forEach(rv => {
+      if (rv.z < -0.05 || rv.z > 1) return;
+      const pos = getRoadScreenPos(rv.x, rv.z);
+      drawBike(pos.x, pos.y, pos.scale, rv.color, false, rv.crashed ? rv.spin : 0, 0);
+    });
+
+    // 5. วาดรถมอเตอร์ไซค์ของผู้เล่น
+    const pPos = getRoadScreenPos(player.x, 0.08);
+    // เงารถบนถนน (ไม่ลอยตามตอนเหินเนิน)
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(pPos.x, pPos.y + 4, Math.max(10, 22 - player.y * 0.12), 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ตัวรถ (ลอยขึ้นตามค่า player.y ตอนเหินเนิน)
+    const lean = (keys.left ? -0.22 : 0) + (keys.right ? 0.22 : 0) + (player.bashTimer > 0 ? player.bashDir * 0.35 : 0);
+    if (player.invuln === 0 || frame % 4 < 2) {
+      drawBike(pPos.x, pPos.y - player.y * 1.4, 1.08, '#ff9f1c', player.wheelie, lean, player.bashTimer > 0 ? player.bashDir : 0);
+    }
+
+    // 6. วาดสะเก็ดไฟ
+    sparks.forEach(s => {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(s.x, s.y, 4, 4);
+    });
+  }
+
+  function drawBike(x, y, scale, color, isWheelie, tilt, bashDir) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.rotate(tilt);
+
+    // เอฟเฟกต์ถีบ/เบียดด้านข้าง
+    if (bashDir !== 0) {
+      ctx.strokeStyle = '#ff4d6d';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(bashDir * 24, -22, 18, -0.8, 0.8);
+      ctx.stroke();
+    }
+
+    // ล้อหลัง
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(-7, -16, 14, 20);
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-3, -14, 6, 16);
+
+    // ถังน้ำมันและแฟริ่งรถ (ยกสูงขึ้นถ้ายกล้อ)
+    const liftY = isWheelie ? -12 : 0;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(-12, -14 + liftY);
+    ctx.lineTo(12, -14 + liftY);
+    ctx.lineTo(8, -34 + liftY);
+    ctx.lineTo(-8, -34 + liftY);
+    ctx.closePath();
+    ctx.fill();
+
+    // ไฟท้าย / ท่อไอเสีย
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(-5, -18 + liftY, 10, 4);
+
+    // ตัวนักบิดและหมวกกันน็อค
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-10, -48 + liftY, 20, 18); // เสื้อแจ็คเก็ต
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.arc(0, -55 + liftY, 9, 0, Math.PI * 2); // หมวกกันน็อค
+    ctx.fill();
+    ctx.fillStyle = '#0ea5e9';
+    ctx.fillRect(-6, -57 + liftY, 12, 4); // กระบังหมวก
+
+    ctx.restore();
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  draw(); // วาดฉากทันทีตอนโหลด
+  loop();
+</script>
+</body>
+</html>

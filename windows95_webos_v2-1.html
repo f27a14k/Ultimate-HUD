@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Windows 95 WebOS v2.1</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #008080; user-select: none; }
+
+  /* Desktop */
+  #desktop {
+    width: 100%; height: calc(100% - 42px);
+    padding: 15px; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 18px;
+    position: relative;
+  }
+
+  /* Icons */
+  .icon {
+    width: 78px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    color: white; font-size: 13px; cursor: pointer; text-shadow: 1px 1px 2px black;
+    padding: 4px; border-radius: 4px; z-index: 2;
+  }
+  .icon:active { background: rgba(0, 0, 128, 0.4); outline: 1px dotted #fff; }
+  .icon-box {
+    width: 46px; height: 46px; background: rgba(255,255,255,0.2); border: 2px solid #fff;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; margin-bottom: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  }
+
+  /* Windows 95 Style Window */
+  .window {
+    position: absolute; top: 30px; left: 4%; width: 92%; max-width: 400px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    box-shadow: 4px 4px 12px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 10;
+  }
+  .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: white;
+    padding: 6px 8px; font-weight: bold; font-size: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    touch-action: none; cursor: move;
+  }
+  .win-controls { display: flex; gap: 4px; }
+  .win-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    width: 24px; height: 22px; font-weight: bold; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .win-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+  .window-body { padding: 10px; flex: 1; background: #c0c0c0; }
+
+  /* Classic Win95 Button */
+  .w95-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    padding: 6px 10px; font-size: 13px; font-weight: bold; cursor: pointer;
+  }
+  .w95-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+
+  /* Taskbar */
+  #taskbar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 42px;
+    background: #c0c0c0; border-top: 2px solid #ffffff;
+    display: flex; align-items: center; padding: 0 4px; gap: 4px; z-index: 100;
+  }
+  #start-btn {
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    padding: 4px 10px; font-weight: bold; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  }
+  #start-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+  #task-list {
+    flex: 1; display: flex; gap: 4px; overflow-x: auto; height: 32px; align-items: center;
+  }
+  .task-item {
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    padding: 4px 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+    white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task-item.active {
+    background: #e0e0e0; border-color: #404040 #ffffff #ffffff #404040;
+  }
+  #clock {
+    border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+    padding: 4px 8px; font-size: 13px; background: #c0c0c0; font-weight: bold; flex-shrink: 0;
+  }
+
+  /* Start Menu */
+  #start-menu {
+    position: fixed; bottom: 42px; left: 4px; width: 210px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    display: none; flex-direction: column; z-index: 101; box-shadow: 3px -3px 8px rgba(0,0,0,0.4);
+  }
+  .menu-item { padding: 10px 12px; border-bottom: 1px solid #999; cursor: pointer; font-size: 14px; }
+  .menu-item:active { background: #000080; color: white; }
+
+  /* My Documents */
+  #doc-list {
+    background: white; border: 2px inset #fff; height: 180px; overflow-y: auto; padding: 6px; margin-bottom: 8px;
+  }
+  .doc-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px; border-bottom: 1px solid #eee; font-size: 14px;
+  }
+
+  /* Notepad */
+  #note-filename {
+    width: 100%; padding: 5px; margin-bottom: 6px; border: 2px inset #fff; font-size: 14px; user-select: text;
+  }
+  #note-text {
+    width: 100%; height: 170px; resize: none; border: 2px inset #fff; padding: 6px; font-size: 15px; user-select: text;
+  }
+
+  /* Paint */
+  #paint-tools { display: flex; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; align-items: center; }
+  .color-swatch { width: 24px; height: 24px; border: 2px solid #404040; cursor: pointer; }
+  .color-swatch.selected { outline: 2px solid #fff; transform: scale(1.1); }
+  #paint-canvas { background: white; border: 2px inset #fff; width: 100%; height: 210px; touch-action: none; display: block; }
+
+  /* Calculator */
+  #calc-display {
+    width: 100%; height: 38px; background: white; border: 2px inset #fff;
+    text-align: right; font-size: 20px; padding: 5px 8px; margin-bottom: 8px; overflow: hidden;
+  }
+  .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .calc-btn {
+    padding: 10px; font-size: 17px; font-weight: bold; background: #c0c0c0;
+    border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff; cursor: pointer;
+  }
+  .calc-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+
+  /* Minesweeper */
+  #mine-grid {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    background: #808080; border: 2px inset #fff; padding: 2px; margin-top: 6px;
+  }
+  .mine-cell {
+    aspect-ratio: 1; background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; cursor: pointer;
+  }
+  .mine-cell.revealed { border: 1px solid #808080; background: #d8d8d8; }
+</style>
+</head>
+<body>
+
+<div id="desktop">
+  <div class="icon" data-win="win-docs">
+    <div class="icon-box">📁</div>
+    <span>My Documents</span>
+  </div>
+  <div class="icon" data-win="win-note">
+    <div class="icon-box">📝</div>
+    <span>Notepad</span>
+  </div>
+  <div class="icon" data-win="win-paint">
+    <div class="icon-box">🎨</div>
+    <span>Paint</span>
+  </div>
+  <div class="icon" data-win="win-calc">
+    <div class="icon-box">🧮</div>
+    <span>Calculator</span>
+  </div>
+  <div class="icon" data-win="win-mine">
+    <div class="icon-box">💣</div>
+    <span>Minesweeper</span>
+  </div>
+</div>
+
+<!-- Window 1: My Documents -->
+<div class="window" id="win-docs" data-title="📁 My Documents">
+  <div class="title-bar">
+    <span>📁 My Documents</span>
+    <div class="win-controls">
+      <button class="win-btn min-btn" data-target="win-docs">_</button>
+      <button class="win-btn close-btn" data-target="win-docs">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="doc-list"></div>
+    <button class="w95-btn" id="btn-new-doc">+ สร้างไฟล์ใหม่</button>
+  </div>
+</div>
+
+<!-- Window 2: Notepad -->
+<div class="window" id="win-note" data-title="📝 Notepad">
+  <div class="title-bar">
+    <span>📝 Notepad</span>
+    <div class="win-controls">
+      <button class="win-btn min-btn" data-target="win-note">_</button>
+      <button class="win-btn close-btn" data-target="win-note">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <input type="text" id="note-filename" placeholder="ตั้งชื่อไฟล์ (เช่น บันทึก.txt)" value="บันทึกทั่วไป.txt">
+    <textarea id="note-text" placeholder="พิมพ์ข้อความที่นี่..."></textarea>
+    <div style="margin-top:6px; display:flex; gap:6px;">
+      <button class="w95-btn" id="btn-save-doc">💾 บันทึกลง My Documents</button>
+      <button class="w95-btn" id="btn-clear-note">ล้างหน้า</button>
+    </div>
+  </div>
+</div>
+
+<!-- Window 3: Paint -->
+<div class="window" id="win-paint" data-title="🎨 Paint">
+  <div class="title-bar">
+    <span>🎨 Paint</span>
+    <div class="win-controls">
+      <button class="win-btn min-btn" data-target="win-paint">_</button>
+      <button class="win-btn close-btn" data-target="win-paint">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="paint-tools">
+      <div class="color-swatch selected" style="background:#000000" data-color="#000000"></div>
+      <div class="color-swatch" style="background:#ff0000" data-color="#ff0000"></div>
+      <div class="color-swatch" style="background:#0000ff" data-color="#0000ff"></div>
+      <div class="color-swatch" style="background:#008000" data-color="#008000"></div>
+      <div class="color-swatch" style="background:#ffa500" data-color="#ffa500"></div>
+      <div class="color-swatch" style="background:#ffffff" data-color="#ffffff" title="ยางลบ"></div>
+      <button class="w95-btn" id="btn-clear-paint" style="padding:3px 7px;">ล้าง</button>
+      <button class="w95-btn" id="btn-save-paint" style="padding:3px 7px;">💾 เซฟรูป</button>
+    </div>
+    <canvas id="paint-canvas" width="350" height="210"></canvas>
+  </div>
+</div>
+
+<!-- Window 4: Calculator -->
+<div class="window" id="win-calc" data-title="🧮 Calculator">
+  <div class="title-bar">
+    <span>🧮 Calculator</span>
+    <div class="win-controls">
+      <button class="win-btn min-btn" data-target="win-calc">_</button>
+      <button class="win-btn close-btn" data-target="win-calc">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div id="calc-display">0</div>
+    <div class="calc-grid" id="calc-buttons">
+      <button class="calc-btn" data-val="7">7</button><button class="calc-btn" data-val="8">8</button><button class="calc-btn" data-val="9">9</button><button class="calc-btn" data-val="/">÷</button>
+      <button class="calc-btn" data-val="4">4</button><button class="calc-btn" data-val="5">5</button><button class="calc-btn" data-val="6">6</button><button class="calc-btn" data-val="*">×</button>
+      <button class="calc-btn" data-val="1">1</button><button class="calc-btn" data-val="2">2</button><button class="calc-btn" data-val="3">3</button><button class="calc-btn" data-val="-">-</button>
+      <button class="calc-btn" data-val="C">C</button><button class="calc-btn" data-val="0">0</button><button class="calc-btn" data-val="=">=</button><button class="calc-btn" data-val="+">+</button>
+    </div>
+  </div>
+</div>
+
+<!-- Window 5: Minesweeper -->
+<div class="window" id="win-mine" data-title="💣 Minesweeper">
+  <div class="title-bar">
+    <span>💣 Minesweeper</span>
+    <div class="win-controls">
+      <button class="win-btn min-btn" data-target="win-mine">_</button>
+      <button class="win-btn close-btn" data-target="win-mine">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span id="mine-status" style="font-weight:bold; font-size:14px;">ระเบิด: 10 ลูก</span>
+      <button class="w95-btn" id="btn-reset-mine">เริ่มใหม่ 🙂</button>
+    </div>
+    <div id="mine-grid"></div>
+  </div>
+</div>
+
+<!-- Start Menu -->
+<div id="start-menu">
+  <div class="menu-item" data-win="win-docs">📁 My Documents</div>
+  <div class="menu-item" data-win="win-note">📝 Notepad</div>
+  <div class="menu-item" data-win="win-paint">🎨 Paint</div>
+  <div class="menu-item" data-win="win-calc">🧮 Calculator</div>
+  <div class="menu-item" data-win="win-mine">💣 Minesweeper</div>
+  <div class="menu-item" id="menu-bg">🖼️ เปลี่ยนสีพื้นหลัง</div>
+</div>
+
+<!-- Taskbar -->
+<div id="taskbar">
+  <button id="start-btn">🪟 Start</button>
+  <div id="task-list"></div>
+  <div id="clock">00:00</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let topZ = 20;
+  const openWindows = new Set();
+
+  function bringToFront(win) {
+    topZ++;
+    win.style.zIndex = topZ;
+    updateTaskbar(win.id);
+  }
+
+  function openWindow(id) {
+    document.getElementById('start-menu').style.display = 'none';
+    const win = document.getElementById(id);
+    if (!win) return;
+    win.style.display = 'flex';
+    openWindows.add(id);
+    bringToFront(win);
+    if (id === 'win-docs') renderDocs();
+    if (id === 'win-paint') initPaintCanvas();
+    if (id === 'win-mine' && document.getElementById('mine-grid').children.length === 0) initMine();
+  }
+
+  function minimizeWindow(id) {
+    const win = document.getElementById(id);
+    if (win) win.style.display = 'none';
+    updateTaskbar(null);
+  }
+
+  function closeWindow(id) {
+    const win = document.getElementById(id);
+    if (win) win.style.display = 'none';
+    openWindows.delete(id);
+    updateTaskbar(null);
+  }
+
+  function updateTaskbar(activeId) {
+    const list = document.getElementById('task-list');
+    list.innerHTML = '';
+    openWindows.forEach(id => {
+      const win = document.getElementById(id);
+      const btn = document.createElement('div');
+      btn.className = 'task-item' + (id === activeId && win.style.display !== 'none' ? ' active' : '');
+      btn.textContent = win.getAttribute('data-title');
+      btn.addEventListener('click', function() {
+        if (win.style.display === 'none') {
+          win.style.display = 'flex';
+          bringToFront(win);
+        } else if (id === activeId) {
+          minimizeWindow(id);
+        } else {
+          bringToFront(win);
+        }
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  // Bind Desktop Icons & Start Menu Items
+  document.querySelectorAll('[data-win]').forEach(el => {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openWindow(this.getAttribute('data-win'));
+    });
+  });
+
+  // Bind Window Controls
+  document.querySelectorAll('.min-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      minimizeWindow(this.getAttribute('data-target'));
+    });
+  });
+
+  document.querySelectorAll('.close-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closeWindow(this.getAttribute('data-target'));
+    });
+  });
+
+  // Bring window to front on tap
+  document.querySelectorAll('.window').forEach(win => {
+    win.addEventListener('pointerdown', function() {
+      bringToFront(this);
+    });
+  });
+
+  // Draggable Windows (Pointer Events for Mouse & Touch)
+  document.querySelectorAll('.title-bar').forEach(bar => {
+    let isDragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    const win = bar.parentElement;
+
+    bar.addEventListener('pointerdown', function(e) {
+      if (e.target.closest('.win-controls')) return;
+      isDragging = true;
+      bringToFront(win);
+      startX = e.clientX;
+      startY = e.clientY;
+      origLeft = win.offsetLeft;
+      origTop = win.offsetTop;
+      bar.setPointerCapture(e.pointerId);
+    });
+
+    bar.addEventListener('pointermove', function(e) {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      win.style.left = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx)) + 'px';
+      win.style.top = Math.max(0, Math.min(window.innerHeight - 80, origTop + dy)) + 'px';
+    });
+
+    bar.addEventListener('pointerup', function(e) {
+      isDragging = false;
+      try { bar.releasePointerCapture(e.pointerId); } catch(err) {}
+    });
+  });
+
+  // Start Menu Toggle
+  const startBtn = document.getElementById('start-btn');
+  const startMenu = document.getElementById('start-menu');
+  startBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    startMenu.style.display = startMenu.style.display === 'flex' ? 'none' : 'flex';
+  });
+  document.getElementById('desktop').addEventListener('click', function() {
+    startMenu.style.display = 'none';
+  });
+
+  // Background Color Switcher
+  const bgColors = ['#008080', '#1e272e', '#2c3e50', '#4a148c', '#004d40'];
+  let bgIdx = 0;
+  document.getElementById('menu-bg').addEventListener('click', function() {
+    bgIdx = (bgIdx + 1) % bgColors.length;
+    document.body.style.background = bgColors[bgIdx];
+    startMenu.style.display = 'none';
+  });
+
+  // Clock
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // --- My Documents & Notepad ---
+  function getDocs() {
+    try { return JSON.parse(localStorage.getItem('w95_docs') || '{}'); }
+    catch(e) { return {}; }
+  }
+  function saveDocs(docs) {
+    localStorage.setItem('w95_docs', JSON.stringify(docs));
+  }
+  function renderDocs() {
+    const list = document.getElementById('doc-list');
+    const docs = getDocs();
+    const keys = Object.keys(docs);
+    list.innerHTML = '';
+    if (keys.length === 0) {
+      list.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">ยังไม่มีไฟล์บันทึกไว้</div>';
+      return;
+    }
+    keys.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'doc-row';
+      const title = document.createElement('span');
+      title.textContent = '📄 ' + name;
+      title.style.cursor = 'pointer';
+      title.style.fontWeight = 'bold';
+      title.addEventListener('click', function() {
+        document.getElementById('note-filename').value = name;
+        document.getElementById('note-text').value = docs[name];
+        openWindow('win-note');
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'w95-btn';
+      delBtn.style.padding = '2px 6px';
+      delBtn.textContent = 'ลบ';
+      delBtn.addEventListener('click', function() {
+        const d = getDocs();
+        delete d[name];
+        saveDocs(d);
+        renderDocs();
+      });
+
+      row.appendChild(title);
+      row.appendChild(delBtn);
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById('btn-new-doc').addEventListener('click', function() {
+    document.getElementById('note-filename').value = 'ไฟล์ใหม่_' + (Object.keys(getDocs()).length + 1) + '.txt';
+    document.getElementById('note-text').value = '';
+    openWindow('win-note');
+  });
+
+  document.getElementById('btn-save-doc').addEventListener('click', function() {
+    const name = document.getElementById('note-filename').value.trim() || 'ไม่มีชื่อ.txt';
+    const text = document.getElementById('note-text').value;
+    const docs = getDocs();
+    docs[name] = text;
+    saveDocs(docs);
+    alert('บันทึกไฟล์ "' + name + '" เรียบร้อยแล้ว!');
+    renderDocs();
+  });
+
+  document.getElementById('btn-clear-note').addEventListener('click', function() {
+    document.getElementById('note-text').value = '';
+  });
+
+  // --- Paint App ---
+  const canvas = document.getElementById('paint-canvas');
+  const ctx = canvas.getContext('2d');
+  let paintInitialized = false;
+  let brushColor = '#000000';
+  let drawing = false;
+
+  function initPaintCanvas() {
+    if (paintInitialized) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    paintInitialized = true;
+  }
+
+  document.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.addEventListener('click', function() {
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      this.classList.add('selected');
+      brushColor = this.getAttribute('data-color');
+    });
+  });
+
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('pointerdown', function(e) {
+    initPaintCanvas();
+    drawing = true;
+    const pos = getCanvasPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', function(e) {
+    if (!drawing) return;
+    const pos = getCanvasPos(e);
+    ctx.lineWidth = brushColor === '#ffffff' ? 14 : 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = brushColor;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  });
+
+  canvas.addEventListener('pointerup', function(e) {
+    drawing = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
+  });
+
+  document.getElementById('btn-clear-paint').addEventListener('click', function() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  });
+
+  document.getElementById('btn-save-paint').addEventListener('click', function() {
+    const link = document.createElement('a');
+    link.download = 'paint_drawing.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+
+  // --- Calculator ---
+  let calcExpr = localStorage.getItem('w95_calc') || '';
+  const calcDisp = document.getElementById('calc-display');
+  if (calcExpr) calcDisp.textContent = calcExpr;
+
+  document.querySelectorAll('#calc-buttons .calc-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const val = this.getAttribute('data-val');
+      if (val === 'C') {
+        calcExpr = '';
+        calcDisp.textContent = '0';
+      } else if (val === '=') {
+        try {
+          calcExpr = String(Function('"use strict";return (' + calcExpr + ')')());
+          calcDisp.textContent = calcExpr;
+        } catch (err) {
+          calcDisp.textContent = 'Error';
+          calcExpr = '';
+        }
+      } else {
+        calcExpr += val;
+        calcDisp.textContent = calcExpr;
+      }
+      localStorage.setItem('w95_calc', calcExpr);
+    });
+  });
+
+  // --- Minesweeper (8x8, 10 mines) ---
+  let mineBoard = [], mineOver = false;
+  function initMine() {
+    mineOver = false;
+    document.getElementById('mine-status').textContent = 'ระเบิด: 10 ลูก';
+    const grid = document.getElementById('mine-grid');
+    grid.innerHTML = '';
+    mineBoard = Array(64).fill(0);
+    let placed = 0;
+    while (placed < 10) {
+      const idx = Math.floor(Math.random() * 64);
+      if (mineBoard[idx] !== 'M') {
+        mineBoard[idx] = 'M';
+        placed++;
+      }
+    }
+    for (let i = 0; i < 64; i++) {
+      if (mineBoard[i] === 'M') continue;
+      let count = 0;
+      const r = Math.floor(i / 8), c = i % 8;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && mineBoard[nr * 8 + nc] === 'M') count++;
+        }
+      }
+      mineBoard[i] = count;
+    }
+    for (let i = 0; i < 64; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mine-cell';
+      cell.dataset.idx = i;
+      cell.addEventListener('click', function() { revealMine(i); });
+      grid.appendChild(cell);
+    }
+  }
+
+  function revealMine(idx) {
+    if (mineOver) return;
+    const cells = document.getElementById('mine-grid').children;
+    const cell = cells[idx];
+    if (cell.classList.contains('revealed')) return;
+    cell.classList.add('revealed');
+    if (mineBoard[idx] === 'M') {
+      cell.textContent = '💥';
+      cell.style.background = '#ff4d4d';
+      mineOver = true;
+      document.getElementById('mine-status').textContent = 'เกมโอเวอร์! โดนระเบิด';
+      for (let i = 0; i < 64; i++) {
+        if (mineBoard[i] === 'M' && i !== idx) cells[i].textContent = '💣';
+      }
+      return;
+    }
+    if (mineBoard[idx] > 0) {
+      cell.textContent = mineBoard[idx];
+      const colors = ['', 'blue', 'green', 'red', 'darkblue', 'brown'];
+      cell.style.color = colors[mineBoard[idx]] || 'black';
+    } else {
+      const r = Math.floor(idx / 8), c = idx % 8;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) revealMine(nr * 8 + nc);
+        }
+      }
+    }
+  }
+
+  document.getElementById('btn-reset-mine').addEventListener('click', initMine);
+});
+</script>
+</body>
+</html>

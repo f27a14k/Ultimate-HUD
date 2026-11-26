@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Web Camera Filter App</title>
+<style>
+  * { box-sizing: border-box; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #111; color: #fff; display: flex; flex-direction: column; overflow: hidden; }
+  
+  /* แถบด้านบน */
+  .top-bar {
+    height: 54px; background: #1c1c1e; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; border-bottom: 1px solid #333; z-index: 10;
+  }
+  .app-title { font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+  .switch-btn {
+    background: #2c2c2e; color: #fff; border: 1px solid #444; padding: 6px 12px;
+    border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+  }
+  .switch-btn:active { background: #444; }
+
+  /* พื้นที่แสดงผลกล้อง */
+  .viewfinder {
+    flex: 1; position: relative; display: flex; align-items: center; justify-content: center;
+    background: #000; overflow: hidden;
+  }
+  video {
+    width: 100%; height: 100%; object-fit: cover; transition: filter 0.2s ease;
+  }
+  .mirror { transform: scaleX(-1); }
+
+  /* ข้อความแจ้งเตือนกรณีเปิดไฟล์ตรงๆ แล้วเบราว์เซอร์บล็อกกล้อง */
+  #error-box {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 85%; max-width: 340px; background: rgba(30,30,30,0.95); border: 1px solid #555;
+    border-radius: 12px; padding: 20px; text-align: center; display: none; z-index: 20;
+  }
+  #error-box h3 { margin: 0 0 10px 0; color: #ff453a; font-size: 17px; }
+  #error-box p { font-size: 13px; line-height: 1.5; color: #ddd; margin: 0 0 15px 0; }
+  .retry-btn {
+    background: #0a84ff; color: white; border: none; padding: 10px 18px;
+    border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer;
+  }
+
+  /* แถบเลือกฟิลเตอร์ */
+  .filter-bar {
+    height: 76px; background: #1c1c1e; display: flex; align-items: center; gap: 10px;
+    padding: 0 12px; overflow-x: auto; border-top: 1px solid #333;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    flex: 0 0 auto; padding: 8px 14px; background: #2c2c2e; border: 2px solid transparent;
+    border-radius: 18px; font-size: 13px; color: #ccc; cursor: pointer; transition: 0.2s;
+  }
+  .filter-chip.active {
+    background: #0a84ff; color: #fff; border-color: #64d2ff; font-weight: bold;
+  }
+
+  /* แถบปุ่มชัตเตอร์ด้านล่าง */
+  .bottom-bar {
+    height: 96px; background: #111; display: flex; align-items: center; justify-content: space-around;
+    padding: 0 20px;
+  }
+  #shutter-btn {
+    width: 68px; height: 68px; border-radius: 50%; background: #fff;
+    border: 4px solid #888; cursor: pointer; transition: transform 0.1s;
+  }
+  #shutter-btn:active { transform: scale(0.9); background: #ddd; }
+
+  #preview-thumb {
+    width: 48px; height: 48px; border-radius: 8px; background: #222; border: 2px solid #555;
+    overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  #preview-thumb img { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .spacer { width: 48px; }
+
+  /* หน้าต่างดูรูปที่ถ่ายและดาวน์โหลด */
+  #photo-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92);
+    display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  #captured-img {
+    max-width: 100%; max-height: 70%; border-radius: 12px; border: 2px solid #444; margin-bottom: 20px;
+  }
+  .modal-actions { display: flex; gap: 15px; }
+  .action-btn {
+    padding: 12px 22px; border-radius: 25px; border: none; font-size: 15px; font-weight: bold; cursor: pointer;
+  }
+  .btn-save { background: #30d158; color: #000; }
+  .btn-close { background: #3a3a3c; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="app-title">📸 WebCam Filter</div>
+  <button class="switch-btn" onclick="switchCamera()">🔄 สลับกล้อง</button>
+</div>
+
+<div class="viewfinder">
+  <video id="video" autoplay playsinline class="mirror"></video>
+  <div id="error-box">
+    <h3>ไม่สามารถเปิดกล้องได้</h3>
+    <p id="error-msg">กรุณากดอนุญาต (Allow) การเข้าถึงกล้องบนเบราว์เซอร์ หรือเปิดไฟล์ผ่านเว็บเซิร์ฟเวอร์จำลอง (HTTPS / Localhost)</p>
+    <button class="retry-btn" onclick="startCamera()">ลองเปิดกล้องอีกครั้ง</button>
+  </div>
+</div>
+
+<div class="filter-bar" id="filter-bar">
+  <div class="filter-chip active" data-filter="none" onclick="setFilter(this, 'none')">ปกติ</div>
+  <div class="filter-chip" data-filter="grayscale(100%) contrast(115%)" onclick="setFilter(this, 'grayscale(100%) contrast(115%)')">ขาวดำคลาสสิก</div>
+  <div class="filter-chip" data-filter="sepia(80%) contrast(105%)" onclick="setFilter(this, 'sepia(80%) contrast(105%)')">วินเทจ 90s</div>
+  <div class="filter-chip" data-filter="saturate(180%) contrast(110%)" onclick="setFilter(this, 'saturate(180%) contrast(110%)')">สีสดใส</div>
+  <div class="filter-chip" data-filter="hue-rotate(180deg) saturate(140%)" onclick="setFilter(this, 'hue-rotate(180deg) saturate(140%)')">ไซไฟนีออน</div>
+  <div class="filter-chip" data-filter="brightness(115%) contrast(90%) saturate(120%)" onclick="setFilter(this, 'brightness(115%) contrast(90%) saturate(120%)')">ผิวใสละมุน</div>
+  <div class="filter-chip" data-filter="invert(100%)" onclick="setFilter(this, 'invert(100%)')">ฟิล์มเนกาทีฟ</div>
+</div>
+
+<div class="bottom-bar">
+  <div id="preview-thumb" onclick="openModal()">
+    <span style="font-size:18px; color:#666;">🖼️</span>
+    <img id="thumb-img" src="" alt="preview">
+  </div>
+  <button id="shutter-btn" onclick="takePhoto()"></button>
+  <div class="spacer"></div>
+</div>
+
+<div id="photo-modal">
+  <img id="captured-img" src="" alt="captured">
+  <div class="modal-actions">
+    <button class="action-btn btn-close" onclick="closeModal()">ถ่ายใหม่</button>
+    <button class="action-btn btn-save" onclick="downloadPhoto()">⬇️ บันทึกรูปลงเครื่อง</button>
+  </div>
+</div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const errorBox = document.getElementById('error-box');
+  const errorMsg = document.getElementById('error-msg');
+  
+  let currentStream = null;
+  let facingMode = 'user'; // เริ่มต้นที่กล้องหน้า
+  let currentFilter = 'none';
+  let lastPhotoDataUrl = '';
+
+  async function startCamera() {
+    errorBox.style.display = 'none';
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      errorMsg.innerText = 'เบราว์เซอร์บล็อกการเข้าถึงกล้อง เนื่องจากเปิดไฟล์จากโฟลเดอร์โดยตรง (file://) แนะนำให้เปิดผ่านแอปจำลองเว็บเซิร์ฟเวอร์ หรือโฮสต์ออนไลน์ครับ';
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    try {
+      const constraints = {
+        video: { facingMode: facingMode },
+        audio: false
+      };
+      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = currentStream;
+      
+      // กลับด้านภาพเฉพาะกล้องหน้า
+      if (facingMode === 'user') {
+        video.classList.add('mirror');
+      } else {
+        video.classList.remove('mirror');
+      }
+    } catch (err) {
+      errorMsg.innerText = 'ไม่สามารถเข้าถึงกล้องได้ (' + err.name + ') กรุณาตรวจสอบสิทธิ์การอนุญาตกล้องในตั้งค่าเบราว์เซอร์ครับ';
+      errorBox.style.display = 'block';
+    }
+  }
+
+  function switchCamera() {
+    facingMode = (facingMode === 'user') ? 'environment' : 'user';
+    startCamera();
+  }
+
+  function setFilter(element, filterValue) {
+    currentFilter = filterValue;
+    video.style.filter = currentFilter;
+    
+    document.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
+    element.classList.add('active');
+  }
+
+  function takePhoto() {
+    if (!currentStream) return;
+    
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    canvas.width = width;
+    canvas.height = height;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.filter = currentFilter;
+    
+    // หากเป็นกล้องหน้า ให้กลับด้านภาพใน Canvas ให้ตรงกับที่เห็นบนจอ
+    if (facingMode === 'user') {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+    
+    ctx.drawImage(video, 0, 0, width, height);
+    
+    lastPhotoDataUrl = canvas.toDataURL('image/png');
+    
+    // แสดงรูปตัวอย่างมุมซ้ายล่างและเปิดหน้าต่างพรีวิว
+    const thumbImg = document.getElementById('thumb-img');
+    thumbImg.src = lastPhotoDataUrl;
+    thumbImg.style.display = 'block';
+    document.querySelector('#preview-thumb span').style.display = 'none';
+    
+    openModal();
+  }
+
+  function openModal() {
+    if (!lastPhotoDataUrl) return;
+    document.getElementById('captured-img').src = lastPhotoDataUrl;
+    document.getElementById('photo-modal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('photo-modal').style.display = 'none';
+  }
+
+  function downloadPhoto() {
+    if (!lastPhotoDataUrl) return;
+    const link = document.createElement('a');
+    link.download = 'filter_photo_' + Date.now() + '.png';
+    link.href = lastPhotoDataUrl;
+    link.click();
+  }
+
+  window.addEventListener('DOMContentLoaded', startCamera);
+</script>
+</body>
+</html>

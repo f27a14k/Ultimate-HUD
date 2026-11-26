@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Super Plumber 2026</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #111;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  #game-container {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    background: #5c94fc;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #hud {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000;
+    pointer-events: none;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  #overlay h1 {
+    font-size: 28px;
+    color: #ffd166;
+    text-shadow: 3px 3px 0 #000;
+    margin-bottom: 10px;
+  }
+  #overlay p {
+    font-size: 15px;
+    margin-bottom: 20px;
+    color: #eee;
+  }
+  #start-btn {
+    padding: 14px 32px;
+    font-size: 18px;
+    font-weight: bold;
+    background: #e63946;
+    color: #fff;
+    border: 3px solid #fff;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  }
+  #start-btn:active { transform: scale(0.95); }
+  #controls {
+    height: 120px;
+    background: #1d1e22;
+    border-top: 3px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    touch-action: manipulation;
+  }
+  .dpad {
+    display: flex;
+    gap: 16px;
+  }
+  .btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: #2f3136;
+    border: 3px solid #555;
+    color: #fff;
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 0 #000;
+  }
+  .btn:active, .btn.active {
+    background: #4f545c;
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #000;
+  }
+  .btn-jump {
+    width: 84px;
+    height: 84px;
+    background: #e63946;
+    border-color: #ff8fa3;
+    font-size: 18px;
+  }
+  .btn-jump:active, .btn-jump.active {
+    background: #c1121f;
+  }
+</style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div>🪙 <span id="score">0</span></div>
+      <div>ด่าน 1-1</div>
+      <div>❤️ <span id="lives">3</span></div>
+    </div>
+    <div id="overlay">
+      <h1 id="overlay-title">🍄 SUPER PLUMBER 2026</h1>
+      <p id="overlay-desc">โหม่งบล็อก [?] เก็บเหรียญ เหยียบมอนสเตอร์ แล้วไปให้ถึงเสาธง!</p>
+      <button id="start-btn" onclick="startGame()">เริ่มเกม</button>
+    </div>
+  </div>
+  <div id="controls">
+    <div class="dpad">
+      <div class="btn" id="btn-left">◀</div>
+      <div class="btn" id="btn-right">▶</div>
+    </div>
+    <div class="btn btn-jump" id="btn-jump">กระโดด</div>
+  </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlayDesc = document.getElementById('overlay-desc');
+const startBtn = document.getElementById('start-btn');
+
+let audioCtx = null;
+function playSound(type) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+
+    if (type === 'jump') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(480, now + 0.15);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now); osc.stop(now + 0.15);
+    } else if (type === 'coin') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(987, now);
+      osc.frequency.setValueAtTime(1318, now + 0.07);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.start(now); osc.stop(now + 0.25);
+    } else if (type === 'stomp') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now); osc.stop(now + 0.12);
+    } else if (type === 'win') {
+      osc.type = 'triangle';
+      [523, 659, 783, 1046].forEach((freq, i) => {
+        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+      });
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc.start(now); osc.stop(now + 0.5);
+    } else if (type === 'die') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.start(now); osc.stop(now + 0.4);
+    }
+  } catch (e) {}
+}
+
+function resize() {
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const keys = { left: false, right: false, jump: false };
+
+function bindTouch(id, key) {
+  const el = document.getElementById(id);
+  const on = (e) => { e.preventDefault(); keys[key] = true; el.classList.add('active'); };
+  const off = (e) => { e.preventDefault(); keys[key] = false; el.classList.remove('active'); };
+  el.addEventListener('touchstart', on, { passive: false });
+  el.addEventListener('touchend', off, { passive: false });
+  el.addEventListener('mousedown', on);
+  el.addEventListener('mouseup', off);
+  el.addEventListener('mouseleave', off);
+}
+bindTouch('btn-left', 'left');
+bindTouch('btn-right', 'right');
+bindTouch('btn-jump', 'jump');
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') keys.jump = true;
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') keys.jump = false;
+});
+
+let gameState = 'menu';
+let score = 0;
+let lives = 3;
+let cameraX = 0;
+const GRAVITY = 0.55;
+const GROUND_OFFSET = 60;
+
+let player, platforms, blocks, enemies, coins, clouds, flagX;
+
+function initLevel() {
+  const groundY = canvas.height - GROUND_OFFSET;
+  player = {
+    x: 60, y: groundY - 40, w: 28, h: 36,
+    vx: 0, vy: 0, speed: 4.5, jumpPower: -12.5,
+    grounded: false, facing: 1
+  };
+  cameraX = 0;
+
+  platforms = [
+    { x: 0, y: groundY, w: 650, h: GROUND_OFFSET },
+    { x: 750, y: groundY, w: 550, h: GROUND_OFFSET },
+    { x: 1420, y: groundY, w: 600, h: GROUND_OFFSET },
+    { x: 2140, y: groundY, w: 800, h: GROUND_OFFSET },
+    // ท่อเขียว
+    { x: 420, y: groundY - 55, w: 48, h: 55, pipe: true },
+    { x: 960, y: groundY - 75, w: 48, h: 75, pipe: true },
+    { x: 1680, y: groundY - 60, w: 48, h: 60, pipe: true }
+  ];
+
+  blocks = [
+    { x: 240, y: groundY - 120, w: 34, h: 34, type: 'q', used: false },
+    { x: 310, y: groundY - 120, w: 34, h: 34, type: 'brick' },
+    { x: 344, y: groundY - 120, w: 34, h: 34, type: 'q', used: false },
+    { x: 378, y: groundY - 120, w: 34, h: 34, type: 'brick' },
+    { x: 840, y: groundY - 130, w: 34, h: 34, type: 'q', used: false },
+    { x: 1120, y: groundY - 140, w: 34, h: 34, type: 'brick' },
+    { x: 1154, y: groundY - 140, w: 34, h: 34, type: 'q', used: false },
+    { x: 1188, y: groundY - 140, w: 34, h: 34, type: 'brick' },
+    { x: 1520, y: groundY - 125, w: 34, h: 34, type: 'q', used: false },
+    { x: 1820, y: groundY - 135, w: 34, h: 34, type: 'q', used: false },
+    { x: 2300, y: groundY - 120, w: 34, h: 34, type: 'q', used: false }
+  ];
+
+  enemies = [
+    { x: 520, y: groundY - 28, w: 28, h: 28, vx: -1.4, minX: 470, maxX: 620, alive: true },
+    { x: 880, y: groundY - 28, w: 28, h: 28, vx: -1.5, minX: 760, maxX: 930, alive: true },
+    { x: 1150, y: groundY - 28, w: 28, h: 28, vx: 1.6, minX: 1020, maxX: 1270, alive: true },
+    { x: 1560, y: groundY - 28, w: 28, h: 28, vx: -1.7, minX: 1440, maxX: 1650, alive: true },
+    { x: 1900, y: groundY - 28, w: 28, h: 28, vx: -1.8, minX: 1740, maxX: 1990, alive: true }
+  ];
+
+  coins = [];
+  clouds = [];
+  for (let i = 0; i < 14; i++) {
+    clouds.push({ x: i * 230 + 60, y: 40 + (i % 3) * 35, w: 70 + (i % 2) * 25 });
+  }
+  flagX = 2750;
+}
+
+function startGame() {
+  score = 0;
+  lives = 3;
+  scoreEl.textContent = score;
+  livesEl.textContent = lives;
+  overlay.style.display = 'none';
+  initLevel();
+  gameState = 'playing';
+}
+
+function loseLife() {
+  playSound('die');
+  lives--;
+  livesEl.textContent = lives;
+  if (lives <= 0) {
+    gameState = 'gameover';
+    overlayTitle.textContent = 'GAME OVER 💀';
+    overlayDesc.textContent = 'คะแนนรวมของคุณ: ' + score + ' เหรียญ';
+    startBtn.textContent = 'เล่นอีกครั้ง';
+    overlay.style.display = 'flex';
+  } else {
+    initLevel();
+  }
+}
+
+function rectIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  if (gameState !== 'playing') return;
+
+  if (keys.left) { player.vx = -player.speed; player.facing = -1; }
+  else if (keys.right) { player.vx = player.speed; player.facing = 1; }
+  else { player.vx *= 0.78; if (Math.abs(player.vx) < 0.2) player.vx = 0; }
+
+  if (keys.jump && player.grounded) {
+    player.vy = player.jumpPower;
+    player.grounded = false;
+    playSound('jump');
+  }
+
+  player.x += player.vx;
+  if (player.x < 0) player.x = 0;
+
+  const solids = [...platforms, ...blocks];
+  for (const s of solids) {
+    if (rectIntersect(player, s)) {
+      if (player.vx > 0) player.x = s.x - player.w;
+      else if (player.vx < 0) player.x = s.x + s.w;
+    }
+  }
+
+  player.vy += GRAVITY;
+  player.y += player.vy;
+  player.grounded = false;
+
+  for (const s of solids) {
+    if (rectIntersect(player, s)) {
+      if (player.vy > 0) {
+        player.y = s.y - player.h;
+        player.vy = 0;
+        player.grounded = true;
+      } else if (player.vy < 0) {
+        player.y = s.y + s.h;
+        player.vy = 0;
+        if (s.type === 'q' && !s.used) {
+          s.used = true;
+          score += 10;
+          scoreEl.textContent = score;
+          playSound('coin');
+          coins.push({ x: s.x + 9, y: s.y - 24, vy: -5, life: 25 });
+        }
+      }
+    }
+  }
+
+  if (player.y > canvas.height + 50) {
+    loseLife();
+    return;
+  }
+
+  for (const en of enemies) {
+    if (!en.alive) continue;
+    en.x += en.vx;
+    if (en.x <= en.minX || en.x + en.w >= en.maxX) en.vx *= -1;
+
+    if (rectIntersect(player, en)) {
+      if (player.vy > 0 && player.y + player.h - player.vy <= en.y + 10) {
+        en.alive = false;
+        player.vy = -8.5;
+        score += 20;
+        scoreEl.textContent = score;
+        playSound('stomp');
+      } else {
+        loseLife();
+        return;
+      }
+    }
+  }
+
+  for (let i = coins.length - 1; i >= 0; i--) {
+    coins[i].y += coins[i].vy;
+    coins[i].vy += 0.3;
+    coins[i].life--;
+    if (coins[i].life <= 0) coins.splice(i, 1);
+  }
+
+  if (player.x + player.w >= flagX) {
+    playSound('win');
+    gameState = 'win';
+    overlayTitle.textContent = '🎉 ผ่านด่าน 1-1 สำเร็จ!';
+    overlayDesc.textContent = 'คะแนนรวมของคุณ: ' + score + ' เหรียญ';
+    startBtn.textContent = 'เล่นอีกรอบ';
+    overlay.style.display = 'flex';
+  }
+
+  const targetCam = player.x - canvas.width * 0.32;
+  if (targetCam > cameraX) cameraX = targetCam;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // เมฆ
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  for (const c of clouds) {
+    const cx = c.x - cameraX * 0.4;
+    ctx.beginPath();
+    ctx.arc(cx, c.y, 18, 0, Math.PI * 2);
+    ctx.arc(cx + 20, c.y - 6, 22, 0, Math.PI * 2);
+    ctx.arc(cx + 42, c.y, 18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+
+  // พื้นและท่อ
+  for (const p of platforms) {
+    if (p.pipe) {
+      ctx.fillStyle = '#2b9348';
+      ctx.fillRect(p.x + 4, p.y + 14, p.w - 8, p.h - 14);
+      ctx.fillStyle = '#55a630';
+      ctx.fillRect(p.x, p.y, p.w, 16);
+      ctx.strokeStyle = '#004b23';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.x, p.y, p.w, 16);
+      ctx.strokeRect(p.x + 4, p.y + 14, p.w - 8, p.h - 14);
+    } else {
+      ctx.fillStyle = '#c84c0c';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#70e000';
+      ctx.fillRect(p.x, p.y, p.w, 10);
+    }
+  }
+
+  // บล็อก
+  for (const b of blocks) {
+    if (b.type === 'q') {
+      ctx.fillStyle = b.used ? '#8d6e63' : '#ffb703';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      if (!b.used) {
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('?', b.x + 11, b.y + 24);
+      }
+    } else {
+      ctx.fillStyle = '#b5651d';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = '#4a2500';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+    }
+  }
+
+  // เหรียญเด้ง
+  for (const c of coins) {
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.ellipse(c.x + 8, c.y + 10, 7, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#f77f00';
+    ctx.stroke();
+  }
+
+  // มอนสเตอร์
+  for (const en of enemies) {
+    if (!en.alive) continue;
+    ctx.fillStyle = '#8b4513';
+    ctx.beginPath();
+    ctx.arc(en.x + 14, en.y + 14, 14, Math.PI, 0);
+    ctx.fillRect(en.x + 4, en.y + 14, 20, 14);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(en.x + 7, en.y + 10, 4, 6);
+    ctx.fillRect(en.x + 17, en.y + 10, 4, 6);
+  }
+
+  // เสาธงชัย
+  const groundY = canvas.height - GROUND_OFFSET;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(flagX, groundY - 210, 6, 210);
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath();
+  ctx.arc(flagX + 3, groundY - 214, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e63946';
+  ctx.beginPath();
+  ctx.moveTo(flagX + 6, groundY - 205);
+  ctx.lineTo(flagX + 56, groundY - 185);
+  ctx.lineTo(flagX + 6, groundY - 165);
+  ctx.fill();
+
+  // ตัวละครผู้เล่น
+  if (player) {
+    // หมวกและเสื้อแดง
+    ctx.fillStyle = '#e63946';
+    ctx.fillRect(player.x + 2, player.y, player.w - 4, 8);
+    ctx.fillRect(player.x + 4, player.y + 16, player.w - 8, 12);
+    // ใบหน้า
+    ctx.fillStyle = '#ffcdb2';
+    ctx.fillRect(player.x + 4, player.y + 8, player.w - 8, 9);
+    // ตา
+    ctx.fillStyle = '#000';
+    const eyeX = player.facing === 1 ? player.x + 17 : player.x + 7;
+    ctx.fillRect(eyeX, player.y + 10, 3, 4);
+    // กางเกงเอี๊ยมน้ำเงิน
+    ctx.fillStyle = '#1d3557';
+    ctx.fillRect(player.x + 5, player.y + 24, player.w - 10, 12);
+  }
+
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+initLevel();
+loop();
+</script>
+</body>
+</html>

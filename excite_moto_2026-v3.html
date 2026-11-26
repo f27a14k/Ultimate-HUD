@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Excite Moto 2026 - Mega Ramps</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #111827;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .hud {
+    background: #0f172a;
+    border-bottom: 2px solid #334155;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: bold;
+    z-index: 10;
+  }
+  .hud-item { display: flex; flex-direction: column; align-items: center; }
+  .hud-label { font-size: 10px; color: #94a3b8; }
+  .hud-val { font-size: 14px; color: #fbbf24; }
+  .temp-bar-wrap {
+    width: 90px;
+    height: 12px;
+    background: #1e293b;
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .temp-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+    transition: width 0.08s linear;
+  }
+  .game-wrap {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .banner {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid #fbbf24;
+    color: #fde047;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .controls {
+    background: #0f172a;
+    border-top: 2px solid #334155;
+    padding: 10px 10px 14px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1.2fr;
+    gap: 8px;
+    align-items: center;
+  }
+  .dpad-lanes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tilt-pad {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+  }
+  .gas-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .btn {
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.45);
+  }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn-lane { background: #2563eb; height: 42px; font-size: 14px; }
+  .btn-tilt { background: #475569; height: 54px; flex: 1; font-size: 13px; flex-direction: column; line-height: 1.1; }
+  .btn-gas { background: #16a34a; height: 42px; font-size: 14px; }
+  .btn-turbo { background: #dc2626; height: 42px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="hud-item">
+    <span class="hud-label">TIME</span>
+    <span class="hud-val" id="timeEl">0:00.0</span>
+  </div>
+  <div class="hud-item">
+    <span class="hud-label">TAKEDOWN</span>
+    <span class="hud-val" id="koEl" style="color:#38bdf8;">0</span>
+  </div>
+  <div class="hud-item">
+    <span class="hud-label">DISTANCE</span>
+    <span class="hud-val" id="distEl">0m / 1500m</span>
+  </div>
+  <div class="hud-item">
+    <span class="hud-label" id="tempLabel">TEMP</span>
+    <div class="temp-bar-wrap"><div class="temp-bar" id="tempBar"></div></div>
+  </div>
+</div>
+
+<div class="game-wrap">
+  <canvas id="gameCanvas"></canvas>
+  <div class="banner" id="banner">🔥 PERFECT LANDING! +SPEED</div>
+</div>
+
+<div class="controls">
+  <div class="dpad-lanes">
+    <button class="btn btn-lane" id="btnUp">▲ เลนบน</button>
+    <button class="btn btn-lane" id="btnDown">▼ เลนล่าง</button>
+  </div>
+  <div class="tilt-pad">
+    <button class="btn btn-tilt" id="btnWheelie">◀<br>ยกล้อ</button>
+    <button class="btn btn-tilt" id="btnLean">▶<br>กดหน้า</button>
+  </div>
+  <div class="gas-pad">
+    <button class="btn btn-turbo" id="btnTurbo">🔥 เทอร์โบ</button>
+    <button class="btn btn-gas" id="btnGas">⚡ คันเร่ง</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const timeEl = document.getElementById('timeEl');
+const koEl = document.getElementById('koEl');
+const distEl = document.getElementById('distEl');
+const tempBar = document.getElementById('tempBar');
+const tempLabel = document.getElementById('tempLabel');
+const banner = document.getElementById('banner');
+
+let W = 0, H = 0;
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = canvas.width = rect.width;
+  H = canvas.height = rect.height;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Web Audio API Engine Sound & SFX
+let audioCtx = null;
+let lastEngineTick = 0;
+function playTone(f1, f2, dur, type = 'sawtooth', vol = 0.08) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f1, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f2), audioCtx.currentTime + dur);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+}
+
+function showBanner(text, color = '#fde047') {
+  banner.textContent = text;
+  banner.style.color = color;
+  banner.style.borderColor = color;
+  banner.style.opacity = '1';
+  clearTimeout(banner._t);
+  banner._t = setTimeout(() => { banner.style.opacity = '0'; }, 1200);
+}
+
+// Input State
+const keys = { gas: false, turbo: false, wheelie: false, lean: false };
+function bindHold(id, prop) {
+  const el = document.getElementById(id);
+  const start = (e) => { e.preventDefault(); keys[prop] = true; };
+  const end = (e) => { e.preventDefault(); keys[prop] = false; };
+  el.addEventListener('touchstart', start, { passive: false });
+  el.addEventListener('touchend', end, { passive: false });
+  el.addEventListener('touchcancel', end, { passive: false });
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', end);
+}
+bindHold('btnGas', 'gas');
+bindHold('btnTurbo', 'turbo');
+bindHold('btnWheelie', 'wheelie');
+bindHold('btnLean', 'lean');
+
+function changeLane(dir) {
+  if (player.crashed || player.overheat > 0 || player.z > 8) return;
+  const next = player.lane + dir;
+  if (next >= 0 && next <= 3) {
+    player.lane = next;
+    playTone(260, 340, 0.06, 'triangle', 0.06);
+  }
+}
+document.getElementById('btnUp').addEventListener('touchstart', (e) => { e.preventDefault(); changeLane(-1); }, { passive: false });
+document.getElementById('btnDown').addEventListener('touchstart', (e) => { e.preventDefault(); changeLane(1); }, { passive: false });
+document.getElementById('btnUp').addEventListener('mousedown', () => changeLane(-1));
+document.getElementById('btnDown').addEventListener('mousedown', () => changeLane(1));
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'w') changeLane(-1);
+  if (e.key === 'ArrowDown' || e.key === 's') changeLane(1);
+  if (e.key === 'ArrowLeft' || e.key === 'a') keys.wheelie = true;
+  if (e.key === 'ArrowRight' || e.key === 'd') keys.lean = true;
+  if (e.key === 'z' || e.key === ' ') keys.gas = true;
+  if (e.key === 'x' || e.key === 'Shift') keys.turbo = true;
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'ArrowLeft' || e.key === 'a') keys.wheelie = false;
+  if (e.key === 'ArrowRight' || e.key === 'd') keys.lean = false;
+  if (e.key === 'z' || e.key === ' ') keys.gas = false;
+  if (e.key === 'x' || e.key === 'Shift') keys.turbo = false;
+});
+
+// Track & Ramps Data (Excitebike Style)
+const TRACK_LEN = 15000; // 1500m
+const ramps = [];
+const coolPads = [];
+const mudPatches = [];
+
+function buildTrack() {
+  ramps.length = 0;
+  coolPads.length = 0;
+  mudPatches.length = 0;
+
+  let x = 550;
+  let pattern = 0;
+  while (x < TRACK_LEN - 600) {
+    const type = pattern % 5;
+    if (type === 0) {
+      // เนินเดี่ยวมาตรฐาน
+      ramps.push({ x: x, upW: 110, flatW: 35, downW: 110, h: 68, lane: -1 });
+      x += 480;
+    } else if (type === 1) {
+      // เนินคู่ (Double Ramps) เหมือนในรูป Excitebike!
+      ramps.push({ x: x, upW: 100, flatW: 25, downW: 90, h: 62, lane: -1 });
+      ramps.push({ x: x + 260, upW: 110, flatW: 30, downW: 110, h: 78, lane: -1 });
+      x += 620;
+    } else if (type === 2) {
+      // เนินยักษ์ (Mega Ramp) เหินสูงข้ามฉาก
+      ramps.push({ x: x, upW: 145, flatW: 45, downW: 145, h: 96, lane: -1 });
+      coolPads.push({ x: x + 410, lane: Math.floor(Math.random() * 4), w: 55 });
+      x += 580;
+    } else if (type === 3) {
+      // ทางตรง + บ่อโคลน + แผ่นลดความร้อน
+      mudPatches.push({ x: x + 40, lane: 1, w: 90 });
+      mudPatches.push({ x: x + 160, lane: 2, w: 90 });
+      coolPads.push({ x: x + 110, lane: 0, w: 55 });
+      ramps.push({ x: x + 310, upW: 105, flatW: 30, downW: 105, h: 66, lane: -1 });
+      x += 560;
+    } else {
+      // เนิน 3 ลูกต่อเนื่อง (Triple Rhythm)
+      ramps.push({ x: x, upW: 85, flatW: 20, downW: 85, h: 52, lane: -1 });
+      ramps.push({ x: x + 220, upW: 85, flatW: 20, downW: 85, h: 58, lane: -1 });
+      ramps.push({ x: x + 440, upW: 95, flatW: 25, downW: 95, h: 65, lane: -1 });
+      coolPads.push({ x: x + 680, lane: 3, w: 55 });
+      x += 780;
+    }
+    pattern++;
+  }
+}
+
+// Player & Rivals
+const player = {
+  x: 120,
+  lane: 1,
+  laneY: 1,
+  z: 0,
+  vz: 0,
+  speed: 0,
+  angle: 0,
+  temp: 15,
+  overheat: 0,
+  crashed: 0,
+  takedowns: 0,
+  finished: false,
+  startTime: performance.now(),
+  finishTime: 0
+};
+
+const rivals = [];
+function spawnRivals() {
+  rivals.length = 0;
+  const colors = ['#38bdf8', '#a855f7', '#f43f5e', '#10b981', '#eab308'];
+  for (let i = 0; i < 6; i++) {
+    rivals.push({
+      x: 220 + i * 190,
+      lane: i % 4,
+      laneY: i % 4,
+      z: 0,
+      vz: 0,
+      baseSpeed: 5.2 + (i % 3) * 0.7,
+      speed: 5.5,
+      angle: 0,
+      crashed: 0,
+      color: colors[i % colors.length]
+    });
+  }
+}
+
+function resetRace() {
+  buildTrack();
+  spawnRivals();
+  player.x = 120;
+  player.lane = 1;
+  player.laneY = 1;
+  player.z = 0;
+  player.vz = 0;
+  player.speed = 0;
+  player.angle = 0;
+  player.temp = 15;
+  player.overheat = 0;
+  player.crashed = 0;
+  player.takedowns = 0;
+  player.finished = false;
+  player.startTime = performance.now();
+  player.finishTime = 0;
+}
+resetRace();
+
+// คำนวณความสูงและองศาความชันของพื้น ณ ตำแหน่ง x
+function getGroundInfo(x) {
+  for (let i = 0; i < ramps.length; i++) {
+    const r = ramps[i];
+    const totalW = r.upW + r.flatW + r.downW;
+    if (x >= r.x && x <= r.x + totalW) {
+      const localX = x - r.x;
+      if (localX <= r.upW) {
+        const ratio = localX / r.upW;
+        return { h: ratio * r.h, slope: -Math.atan2(r.h, r.upW), onRamp: true, phase: 'up' };
+      } else if (localX <= r.upW + r.flatW) {
+        return { h: r.h, slope: 0, onRamp: true, phase: 'flat' };
+      } else {
+        const downX = localX - (r.upW + r.flatW);
+        const ratio = 1 - (downX / r.downW);
+        return { h: ratio * r.h, slope: Math.atan2(r.h, r.downW), onRamp: true, phase: 'down' };
+      }
+    }
+  }
+  return { h: 0, slope: 0, onRamp: false, phase: 'ground' };
+}
+
+function updateBike(b, isPlayer) {
+  if (b.crashed > 0) {
+    b.crashed--;
+    b.speed *= 0.92;
+    b.x += b.speed;
+    b.z = Math.max(0, b.z - 4);
+    b.angle += 0.25;
+    if (b.crashed === 0) {
+      b.angle = 0;
+      b.z = 0;
+      b.vz = 0;
+    }
+    return;
+  }
+
+  // Smooth lane transition
+  b.laneY += (b.lane - b.laneY) * 0.22;
+
+  const gBefore = getGroundInfo(b.x);
+  const onGround = b.z <= gBefore.h + 2;
+
+  if (isPlayer) {
+    if (player.overheat > 0) {
+      player.overheat--;
+      player.temp = Math.max(20, player.temp - 0.7);
+      player.speed *= 0.96;
+      if (player.overheat === 0) {
+        tempLabel.textContent = 'TEMP';
+        tempLabel.style.color = '#94a3b8';
+      }
+    } else {
+      // Acceleration & Turbo
+      let maxSpd = 0;
+      if (keys.turbo) {
+        maxSpd = 10.8;
+        player.temp += 0.42;
+      } else if (keys.gas) {
+        maxSpd = 7.8;
+        player.temp += 0.10;
+      } else {
+        maxSpd = 0;
+        player.temp -= 0.28;
+      }
+
+      // ตรวจสอบบ่อโคลน
+      let inMud = false;
+      if (onGround) {
+        for (const m of mudPatches) {
+          if (m.lane === b.lane && b.x >= m.x && b.x <= m.x + m.w) {
+            inMud = true;
+            break;
+          }
+        }
+        // แผ่นลดความร้อน COOL
+        for (const c of coolPads) {
+          if (c.lane === b.lane && Math.abs(b.x - (c.x + c.w / 2)) < 32) {
+            if (player.temp > 15) {
+              player.temp = Math.max(10, player.temp - 35);
+              playTone(520, 880, 0.12, 'sine', 0.09);
+              showBanner('❄️ COOLANT BOOST!', '#38bdf8');
+            }
+          }
+        }
+      }
+
+      if (inMud) maxSpd *= 0.52;
+
+      if (maxSpd > 0) {
+        b.speed += (maxSpd - b.speed) * 0.06;
+      } else {
+        b.speed *= 0.97;
+      }
+
+      player.temp = Math.max(10, Math.min(100, player.temp));
+      if (player.temp >= 100) {
+        player.overheat = 130;
+        tempLabel.textContent = 'OVERHEAT!';
+        tempLabel.style.color = '#ef4444';
+        playTone(150, 70, 0.35, 'sawtooth', 0.15);
+        showBanner('🔥 ENGINE OVERHEAT!', '#ef4444');
+      }
+    }
+  } else {
+    // AI Rival Movement
+    const targetSpd = b.baseSpeed + Math.sin(b.x * 0.005) * 0.8;
+    b.speed += (targetSpd - b.speed) * 0.05;
+    if (Math.random() < 0.006 && onGround) {
+      b.lane = Math.max(0, Math.min(3, b.lane + (Math.random() < 0.5 ? -1 : 1)));
+    }
+  }
+
+  // Move forward X
+  b.x += b.speed;
+  const gAfter = getGroundInfo(b.x);
+
+  // Ramp Launch & Gravity Physics
+  if (onGround) {
+    // ถ้ากำลังไต่ขึ้นเนินแล้วพ้นขอบยอดเนิน -> ดีดตัวลอยขึ้นฟ้า!
+    if (gBefore.phase === 'up' && gAfter.phase !== 'up' && b.speed > 4.2) {
+      const launchRatio = Math.tan(-gBefore.slope);
+      b.vz = b.speed * launchRatio * 0.92;
+      b.z = gBefore.h + b.vz;
+      if (isPlayer) playTone(200, 460, 0.16, 'triangle', 0.08);
+    } else if (gAfter.onRamp && gAfter.phase === 'up') {
+      b.z = gAfter.h;
+      b.vz = 0;
+      if (isPlayer && keys.wheelie) {
+        b.angle = gAfter.slope - 0.32;
+      } else {
+        b.angle = gAfter.slope;
+      }
+    } else if (gAfter.onRamp && gAfter.phase === 'down') {
+      // ถ้าวิ่งลงเนินเร็วเกินไปจะเหินออกจากสันเนิน
+      if (b.speed > 7.5 && gBefore.phase !== 'down') {
+        b.vz = 0.5;
+        b.z += b.vz;
+      } else {
+        b.z = gAfter.h;
+        b.vz = 0;
+        b.angle = gAfter.slope;
+      }
+    } else {
+      b.z = gAfter.h;
+      b.vz = 0;
+      // Wheelie on flat ground
+      if (isPlayer && keys.wheelie && b.speed > 2.5) {
+        b.angle += (-0.52 - b.angle) * 0.2;
+        if (b.angle < -0.95) {
+          // ยกล้อหงายหลังล้ม!
+          b.crashed = 65;
+          playTone(180, 60, 0.3, 'sawtooth', 0.14);
+          showBanner('💥 WHEELIE CRASH!', '#ef4444');
+        }
+      } else {
+        b.angle += (0 - b.angle) * 0.25;
+      }
+    }
+  } else {
+    // Mid-Air Physics
+    b.vz -= 0.34; // Gravity
+    b.z += b.vz;
+
+    if (isPlayer) {
+      if (keys.wheelie) b.angle -= 0.055;
+      if (keys.lean) b.angle += 0.055;
+    } else {
+      b.angle += (0 - b.angle) * 0.08;
+    }
+
+    // Check Landing
+    if (b.z <= gAfter.h) {
+      const angleDiff = Math.abs(b.angle - gAfter.slope);
+      b.z = gAfter.h;
+      b.vz = 0;
+
+      if (isPlayer && angleDiff > 0.68) {
+        // ลงพื้นผิดองศา -> รถล้ม!
+        b.crashed = 70;
+        playTone(160, 50, 0.35, 'sawtooth', 0.15);
+        showBanner('💥 BAD LANDING!', '#ef4444');
+      } else {
+        if (isPlayer && angleDiff < 0.22 && gAfter.phase === 'down') {
+          b.speed = Math.min(12.5, b.speed + 2.2);
+          playTone(440, 780, 0.14, 'sine', 0.1);
+          showBanner('⚡ SMOOTH LANDING BOOST!', '#4ade80');
+        }
+        b.angle = gAfter.slope;
+      }
+    }
+  }
+}
+
+// เช็กการปาดหน้าเบียดคู่แข่ง (Takedown)
+function checkTakedowns() {
+  if (player.crashed > 0) return;
+  for (const r of rivals) {
+    if (r.crashed > 0) continue;
+    const sameLane = Math.abs(player.laneY - r.laneY) < 0.38;
+    const sameHeight = Math.abs(player.z - r.z) < 22;
+    const dx = player.x - r.x; // บวก = ผู้เล่นอยู่หน้าคู่แข่งนิดหน่อย (ล้อหลังเฉี่ยวล้อหน้าคู่แข่ง)
+    if (sameLane && sameHeight && dx > 12 && dx < 46 && player.speed >= r.speed - 0.5) {
+      r.crashed = 85;
+      player.takedowns++;
+      koEl.textContent = player.takedowns;
+      playTone(300, 110, 0.25, 'square', 0.14);
+      showBanner('👊 TAKEDOWN! ปาดหน้าคู่แข่งล้ม!', '#38bdf8');
+    }
+  }
+}
+
+// Drawing Functions
+function drawBike(screenX, laneBaseY, z, angle, mainColor, wheelColor, isCrashed) {
+  const y = laneBaseY - z;
+  ctx.save();
+  ctx.translate(screenX, y);
+
+  // เงาบนพื้น
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(0, z + 4, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.rotate(angle);
+  if (isCrashed) {
+    ctx.translate(0, -8);
+  }
+
+  // ล้อหลังและล้อหน้า
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = wheelColor;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(-15, -7, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(15, -7, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // โครงรถมอเตอร์ไซค์วิบาก
+  ctx.fillStyle = mainColor;
+  ctx.beginPath();
+  ctx.moveTo(-16, -9);
+  ctx.lineTo(-4, -18);
+  ctx.lineTo(12, -16);
+  ctx.lineTo(17, -9);
+  ctx.lineTo(2, -7);
+  ctx.closePath();
+  ctx.fill();
+
+  // บังโคลนหน้ายกสูงสไตล์วิบาก
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(9, -15);
+  ctx.lineTo(21, -18);
+  ctx.stroke();
+
+  // ตัวนักแข่ง + หมวกกันน็อก
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.arc(0, -25, 5.5, 0, Math.PI * 2); // หมวกกันน็อก
+  ctx.fill();
+
+  // แว่นกันลมนักแข่ง
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(2, -27, 4, 3);
+
+  // ลำตัวและแขนจับแฮนด์
+  ctx.strokeStyle = mainColor;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-4, -14);
+  ctx.lineTo(0, -21);
+  ctx.lineTo(10, -17);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function draw() {
+  const skyH = H * 0.34;
+  const trackTop = skyH;
+  const trackH = H - skyH;
+  const laneH = trackH / 4;
+
+  // 1. ท้องฟ้าและอัฒจันทร์ผู้ชมสไตล์ Excitebike
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(0, 0, W, skyH);
+
+  // อัฒจันทร์ด้านบน
+  const standY = skyH - 42;
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(0, standY, W, 30);
+
+  // กองเชียร์เคลื่อนผ่านตามกล้อง
+  const camX = player.x - W * 0.24;
+  for (let gx = -(camX * 0.5) % 24; gx < W; gx += 24) {
+    ctx.fillStyle = (Math.floor((gx + camX * 0.5) / 24) % 2 === 0) ? '#f97316' : '#facc15';
+    ctx.fillRect(gx, standY + 8, 10, 14);
+  }
+
+  // ขอบรั้วสีน้ำเงิน-ขาวกั้นสนาม
+  ctx.fillStyle = '#1d4ed8';
+  ctx.fillRect(0, skyH - 12, W, 12);
+  ctx.fillStyle = '#ffffff';
+  for (let fx = -(camX % 32); fx < W; fx += 32) {
+    ctx.beginPath();
+    ctx.moveTo(fx, skyH - 12);
+    ctx.lineTo(fx + 16, skyH - 12);
+    ctx.lineTo(fx + 8, skyH);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 2. พื้นสนามดินวิบาก 4 เลน
+  ctx.fillStyle = '#d97706';
+  ctx.fillRect(0, trackTop, W, trackH);
+
+  // เส้นแบ่งเลนทั้ง 4 เลน
+  for (let l = 1; l < 4; l++) {
+    const ly = trackTop + l * laneH;
+    ctx.strokeStyle = 'rgba(120, 53, 15, 0.45)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([16, 14]);
+    ctx.lineDashOffset = camX % 30;
+    ctx.beginPath();
+    ctx.moveTo(0, ly);
+    ctx.lineTo(W, ly);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // ขอบหญ้าด้านล่างสุด
+  ctx.fillStyle = '#16a34a';
+  ctx.fillRect(0, H - 12, W, 12);
+
+  // 3. วาดบ่อโคลนและแผ่นลดความร้อน COOL
+  for (const m of mudPatches) {
+    const sx = m.x - camX;
+    if (sx + m.w < 0 || sx > W) continue;
+    const ly = trackTop + (m.lane + 0.5) * laneH;
+    ctx.fillStyle = '#451a03';
+    ctx.beginPath();
+    ctx.ellipse(sx + m.w / 2, ly, m.w / 2, laneH * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const c of coolPads) {
+    const sx = c.x - camX;
+    if (sx + c.w < 0 || sx > W) continue;
+    const ly = trackTop + (c.lane + 0.5) * laneH;
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(sx, ly - 10, c.w, 20);
+    ctx.fillStyle = '#e0f2fe';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('COOL ❄', sx + 6, ly + 4);
+  }
+
+  // 4. วาดเนินกระโดด 2.5D แบบ Excitebike (ลาดเอียงพาดผ่านทุกเลน)
+  for (const r of ramps) {
+    const totalW = r.upW + r.flatW + r.downW;
+    const sx = r.x - camX;
+    if (sx + totalW < -50 || sx > W + 50) continue;
+
+    const topY = trackTop + 6;
+    const botY = H - 12;
+
+    // ด้านข้างทางขึ้นเนิน (สีน้ำตาลทองสว่าง)
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.moveTo(sx, botY);
+    ctx.lineTo(sx + r.upW, botY - r.h);
+    ctx.lineTo(sx + r.upW, topY - r.h);
+    ctx.lineTo(sx, topY);
+    ctx.closePath();
+    ctx.fill();
+
+    // สันบนยอดเนิน
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(sx + r.upW, botY - r.h);
+    ctx.lineTo(sx + r.upW + r.flatW, botY - r.h);
+    ctx.lineTo(sx + r.upW + r.flatW, topY - r.h);
+    ctx.lineTo(sx + r.upW, topY - r.h);
+    ctx.closePath();
+    ctx.fill();
+
+    // ด้านทางลงเนิน (สีน้ำตาลเข้มเกิดมิติแสงเงา)
+    ctx.fillStyle = '#92400e';
+    ctx.beginPath();
+    ctx.moveTo(sx + r.upW + r.flatW, botY - r.h);
+    ctx.lineTo(sx + totalW, botY);
+    ctx.lineTo(sx + totalW, topY);
+    ctx.lineTo(sx + r.upW + r.flatW, topY - r.h);
+    ctx.closePath();
+    ctx.fill();
+
+    // เส้นขอบสันเนินให้เห็นชัด
+    ctx.strokeStyle = '#fef3c7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, botY);
+    ctx.lineTo(sx + r.upW, botY - r.h);
+    ctx.lineTo(sx + r.upW + r.flatW, botY - r.h);
+    ctx.lineTo(sx + totalW, botY);
+    ctx.stroke();
+  }
+
+  // เส้นชัย (Finish Line)
+  const finishX = TRACK_LEN - camX;
+  if (finishX < W + 100) {
+    for (let fy = trackTop; fy < H - 12; fy += 16) {
+      ctx.fillStyle = (Math.floor(fy / 16) % 2 === 0) ? '#fff' : '#000';
+      ctx.fillRect(finishX, fy, 18, 16);
+    }
+  }
+
+  // 5. จัดเรียงลำดับการวาดรถทั้งหมดตามเลนบนลงล่าง (Painter's Algorithm)
+  const allBikes = [
+    ...rivals.map(r => ({ ref: r, isPlayer: false })),
+    { ref: player, isPlayer: true }
+  ];
+  allBikes.sort((a, b) => a.ref.laneY - b.ref.laneY);
+
+  for (const item of allBikes) {
+    const b = item.ref;
+    const sx = b.x - camX;
+    if (sx < -60 || sx > W + 60) continue;
+    const laneBaseY = trackTop + (b.laneY + 0.65) * laneH;
+    drawBike(
+      sx,
+      laneBaseY,
+      b.z,
+      b.angle,
+      item.isPlayer ? '#ef4444' : b.color,
+      item.isPlayer ? '#fde047' : '#cbd5e1',
+      b.crashed > 0
+    );
+  }
+
+  // หากเข้าเส้นชัยแล้ว แสดงป้ายสรุปเวลา
+  if (player.finished) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(W * 0.12, H * 0.25, W * 0.76, H * 0.45);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(W * 0.12, H * 0.25, W * 0.76, H * 0.45);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏁 เข้าเส้นชัยแล้ว!', W / 2, H * 0.37);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`เวลาที่ใช้: ${player.finishTime} วินาที`, W / 2, H * 0.46);
+    ctx.fillText(`ปาดหน้าคู่แข่งล้ม (Takedown): ${player.takedowns} คัน`, W / 2, H * 0.53);
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('แตะที่หน้าจอเพื่อแข่งรอบใหม่', W / 2, H * 0.62);
+    ctx.textAlign = 'left';
+  }
+}
+
+canvas.addEventListener('click', () => {
+  if (player.finished) resetRace();
+});
+
+function loop() {
+  if (!player.finished) {
+    updateBike(player, true);
+    for (const r of rivals) updateBike(r, false);
+    checkTakedowns();
+
+    // เสียงเครื่องยนต์ตามความเร็ว
+    const now = performance.now();
+    if (player.speed > 1 && now - lastEngineTick > Math.max(45, 160 - player.speed * 10)) {
+      lastEngineTick = now;
+      playTone(75 + player.speed * 14, 65 + player.speed * 12, 0.05, 'sawtooth', 0.025);
+    }
+
+    // อัปเดต HUD
+    const elapsed = (now - player.startTime) / 1000;
+    const mins = Math.floor(elapsed / 60);
+    const secs = (elapsed % 60).toFixed(1).padStart(4, '0');
+    timeEl.textContent = `${mins}:${secs}`;
+    distEl.textContent = `${Math.min(1500, Math.floor(player.x / 10))}m / 1500m`;
+    tempBar.style.width = `${player.temp}%`;
+
+    if (player.x >= TRACK_LEN) {
+      player.finished = true;
+      player.finishTime = elapsed.toFixed(2);
+      playTone(523, 1046, 0.4, 'triangle', 0.15);
+    }
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>

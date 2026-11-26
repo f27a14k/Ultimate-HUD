@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Battle Tank 1990 (Fixed)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #111318;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    padding: 8px 10px 14px;
+  }
+  .hud {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    justify-content: space-between;
+    background: #1e222b;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #323846;
+    font-size: 13px;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+  .hud span { color: #ffd166; }
+  .canvas-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    margin: 6px 0;
+  }
+  canvas {
+    background: #000;
+    border: 3px solid #4a5568;
+    border-radius: 6px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+  }
+  .controls {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    flex-shrink: 0;
+  }
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    gap: 4px;
+  }
+  .d-btn {
+    background: #252a34;
+    border: 2px solid #4a5568;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+  .d-btn:active, .d-btn.active { background: #4a5568; transform: scale(0.94); }
+  .fire-btn {
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ff5964, #d90429);
+    border: 3px solid #ffccd5;
+    color: #fff;
+    font-weight: bold;
+    font-size: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(217, 4, 41, 0.5);
+    touch-action: manipulation;
+  }
+  .fire-btn:active { transform: scale(0.92); background: #b50020; }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 16, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay h1 { font-size: 26px; color: #ffd166; margin-bottom: 10px; }
+  .overlay p { font-size: 14px; color: #cbd5e1; margin-bottom: 20px; line-height: 1.5; }
+  .start-btn {
+    padding: 13px 32px;
+    font-size: 17px;
+    font-weight: bold;
+    border: none;
+    border-radius: 25px;
+    background: #ffd166;
+    color: #111318;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255, 209, 102, 0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div>ด่าน: <span id="stageEl">1</span></div>
+  <div>ศัตรู: <span id="enemyEl">8</span></div>
+  <div>คะแนน: <span id="scoreEl">0</span></div>
+  <div>พลังปืน: <span id="powerEl">Lv.1</span></div>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="game" width="390" height="390"></canvas>
+</div>
+
+<div class="controls">
+  <div class="dpad">
+    <div></div>
+    <div class="d-btn" data-dir="0">▲</div>
+    <div></div>
+    <div class="d-btn" data-dir="3">◀</div>
+    <div style="background:#1a1d24;border-radius:8px;"></div>
+    <div class="d-btn" data-dir="1">▶</div>
+    <div></div>
+    <div class="d-btn" data-dir="2">▼</div>
+    <div></div>
+  </div>
+  <div class="fire-btn" id="fireBtn">FIRE<br>🔥</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <h1>🛡️ BATTLE TANK 1990</h1>
+  <p>ปกป้องฐานทัพนกอินทรี 🦅 ด้านล่างสุด<br>ทำลายรถถังศัตรูทั้งหมดและเก็บไอเทมอัปเกรด</p>
+  <button class="start-btn" id="startBtn">เริ่มภารกิจ</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GRID = 13;
+const TILE = 30; // 13 * 30 = 390px
+
+let audioCtx = null;
+function playSound(f1, f2, dur, type = 'square', vol = 0.1) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f1, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(f2, audioCtx.currentTime + dur);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+}
+
+// 0=ว่าง, 1=อิฐ, 2=เหล็ก, 3=พุ่มไม้, 4=น้ำ, 9=ฐานนกอินทรี
+const BASE_MAP = [
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,0,1,0,1,0,1,0,1,0,1,0],
+  [0,1,0,1,0,1,2,1,0,1,0,1,0],
+  [0,1,0,1,0,0,0,0,0,1,0,1,0],
+  [0,0,0,0,3,3,1,3,3,0,0,0,0],
+  [2,0,1,1,3,4,4,4,3,1,1,0,2],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,0,1,1,0,2,0,1,1,0,1,0],
+  [0,1,0,1,0,0,0,0,0,1,0,1,0],
+  [0,0,0,0,0,1,1,1,0,0,0,0,0],
+  [0,1,0,0,0,1,9,1,0,0,0,1,0],
+  [0,1,0,0,0,1,1,1,0,0,0,1,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0]
+];
+
+let map = [];
+let player = null;
+let enemies = [];
+let bullets = [];
+let explosions = [];
+let powerups = [];
+let keys = { dir: -1 };
+let stage = 1;
+let score = 0;
+let enemiesToSpawn = 8;
+let spawnTimer = 0;
+let baseShieldTimer = 0;
+let gameActive = false;
+
+function initStage(st) {
+  map = BASE_MAP.map(row => [...row]);
+  // เคลียร์ช่องเกิดผู้เล่นและฐานนกอินทรี
+  map[12][4] = 0;
+  map[10][6] = 9;
+  player = { x: 4 * TILE + 3, y: 12 * TILE + 3, w: 24, h: 24, dir: 0, speed: 2.1, power: 1, cooldown: 0, tread: 0 };
+  enemies = [];
+  bullets = [];
+  explosions = [];
+  powerups = [];
+  enemiesToSpawn = 6 + st * 2;
+  spawnTimer = 30;
+  baseShieldTimer = 0;
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('stageEl').textContent = stage;
+  document.getElementById('enemyEl').textContent = enemiesToSpawn + enemies.length;
+  document.getElementById('scoreEl').textContent = score;
+  document.getElementById('powerEl').textContent = 'Lv.' + (player ? player.power : 1);
+}
+
+function setBaseWall(type) {
+  const coords = [[9,5],[9,6],[9,7],[10,5],[10,7],[11,5],[11,6],[11,7]];
+  coords.forEach(([r, c]) => { if (map[r][c] !== 9) map[r][c] = type; });
+}
+
+function canMove(nx, ny, w, h, ignoreObj) {
+  if (nx < 0 || ny < 0 || nx + w > 390 || ny + h > 390) return false;
+  const minC = Math.floor(nx / TILE);
+  const maxC = Math.floor((nx + w - 0.1) / TILE);
+  const minR = Math.floor(ny / TILE);
+  const maxR = Math.floor((ny + h - 0.1) / TILE);
+  for (let r = minR; r <= maxR; r++) {
+    for (let c = minC; c <= maxC; c++) {
+      const t = map[r][c];
+      if (t === 1 || t === 2 || t === 4 || t === 9) return false;
+    }
+  }
+  const all = [player, ...enemies].filter(o => o && o !== ignoreObj);
+  for (const o of all) {
+    if (nx < o.x + o.w && nx + w > o.x && ny < o.y + o.h && ny + h > o.y) return false;
+  }
+  return true;
+}
+
+function shoot(tank, isPlayer) {
+  if (tank.cooldown > 0) return;
+  tank.cooldown = isPlayer ? (tank.power >= 2 ? 14 : 22) : 45;
+  const cx = tank.x + tank.w / 2;
+  const cy = tank.y + tank.h / 2;
+  const spd = isPlayer && tank.power >= 2 ? 6.2 : 4.6;
+  const dirs = [[0, -spd], [spd, 0], [0, spd], [-spd, 0]];
+  bullets.push({
+    x: cx - 3, y: cy - 3, w: 6, h: 6,
+    vx: dirs[tank.dir][0], vy: dirs[tank.dir][1],
+    isPlayer: isPlayer, power: isPlayer ? tank.power : 1
+  });
+  if (isPlayer) playSound(520, 140, 0.09, 'square', 0.08);
+}
+
+function addExplosion(x, y, size = 18) {
+  explosions.push({ x, y, r: 4, maxR: size, life: 12 });
+  playSound(160, 45, 0.22, 'sawtooth', 0.14);
+}
+
+function gameOver(title, msg) {
+  gameActive = false;
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<h1>${title}</h1><p>${msg}<br>คะแนนรวม: <strong style="color:#ffd166;font-size:20px;">${score}</strong></p><button class="start-btn" onclick="startGame()">เล่นอีกครั้ง</button>`;
+  ov.style.display = 'flex';
+}
+
+function startGame() {
+  stage = 1;
+  score = 0;
+  initStage(stage);
+  document.getElementById('overlay').style.display = 'none';
+  gameActive = true;
+  playSound(330, 660, 0.2, 'triangle');
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+
+// ระบบควบคุม D-Pad และคีย์บอร์ด
+document.querySelectorAll('.d-btn').forEach(btn => {
+  const dir = parseInt(btn.getAttribute('data-dir'));
+  const press = (e) => { e.preventDefault(); keys.dir = dir; btn.classList.add('active'); };
+  const release = (e) => { e.preventDefault(); if (keys.dir === dir) keys.dir = -1; btn.classList.remove('active'); };
+  btn.addEventListener('touchstart', press);
+  btn.addEventListener('touchend', release);
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('mouseup', release);
+  btn.addEventListener('mouseleave', release);
+});
+
+const fireBtn = document.getElementById('fireBtn');
+fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameActive && player) shoot(player, true); });
+fireBtn.addEventListener('mousedown', (e) => { e.preventDefault(); if (gameActive && player) shoot(player, true); });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'w') keys.dir = 0;
+  if (e.key === 'ArrowRight' || e.key === 'd') keys.dir = 1;
+  if (e.key === 'ArrowDown' || e.key === 's') keys.dir = 2;
+  if (e.key === 'ArrowLeft' || e.key === 'a') keys.dir = 3;
+  if (e.key === ' ' && gameActive && player) shoot(player, true);
+});
+window.addEventListener('keyup', (e) => {
+  if (['ArrowUp','w','ArrowRight','d','ArrowDown','s','ArrowLeft','a'].includes(e.key)) keys.dir = -1;
+});
+
+function update() {
+  if (!gameActive) return;
+
+  if (baseShieldTimer > 0) {
+    baseShieldTimer--;
+    if (baseShieldTimer === 0) setBaseWall(1);
+  }
+
+  // ผู้เล่นเคลื่อนที่
+  if (player.cooldown > 0) player.cooldown--;
+  if (keys.dir !== -1) {
+    player.dir = keys.dir;
+    player.tread++;
+    const moves = [[0, -player.speed], [player.speed, 0], [0, player.speed], [-player.speed, 0]];
+    const nx = player.x + moves[player.dir][0];
+    const ny = player.y + moves[player.dir][1];
+    if (canMove(nx, ny, player.w, player.h, player)) {
+      player.x = nx;
+      player.y = ny;
+    }
+  }
+
+  // เก็บไอเทม
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const p = powerups[i];
+    if (player.x < p.x + 24 && player.x + player.w > p.x && player.y < p.y + 24 && player.y + player.h > p.y) {
+      playSound(600, 1200, 0.25, 'sine', 0.15);
+      score += 200;
+      if (p.type === 'star') player.power = Math.min(3, player.power + 1);
+      if (p.type === 'bomb') {
+        enemies.forEach(en => { addExplosion(en.x + 12, en.y + 12, 24); score += 100; });
+        enemies = [];
+      }
+      if (p.type === 'shield') {
+        setBaseWall(2);
+        baseShieldTimer = 600;
+      }
+      powerups.splice(i, 1);
+      updateHUD();
+    }
+  }
+
+  // ปล่อยศัตรู
+  if (enemiesToSpawn > 0 && enemies.length < 4) {
+    spawnTimer--;
+    if (spawnTimer <= 0) {
+      const spawns = [3, 6 * TILE + 3, 12 * TILE + 3];
+      const sx = spawns[Math.floor(Math.random() * spawns.length)];
+      if (canMove(sx, 3, 24, 24, null)) {
+        enemies.push({ x: sx, y: 3, w: 24, h: 24, dir: 2, speed: 1.35 + stage * 0.1, cooldown: 30, changeTimer: 60, tread: 0 });
+        enemiesToSpawn--;
+        spawnTimer = 110;
+        updateHUD();
+      }
+    }
+  }
+
+  // AI ศัตรู
+  enemies.forEach(en => {
+    if (en.cooldown > 0) en.cooldown--;
+    en.changeTimer--;
+    en.tread++;
+    const moves = [[0, -en.speed], [en.speed, 0], [0, en.speed], [-en.speed, 0]];
+    const nx = en.x + moves[en.dir][0];
+    const ny = en.y + moves[en.dir][1];
+    if (canMove(nx, ny, en.w, en.h, en) && en.changeTimer > 0) {
+      en.x = nx;
+      en.y = ny;
+    } else {
+      en.dir = Math.random() < 0.45 ? 2 : Math.floor(Math.random() * 4);
+      en.changeTimer = 40 + Math.floor(Math.random() * 60);
+    }
+    if (Math.random() < 0.035) shoot(en, false);
+  });
+
+  // กระสุน
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+
+    if (b.x < 0 || b.y < 0 || b.x > 390 || b.y > 390) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    const c = Math.floor((b.x + 3) / TILE);
+    const r = Math.floor((b.y + 3) / TILE);
+    if (r >= 0 && r < GRID && c >= 0 && c < GRID) {
+      const tile = map[r][c];
+      if (tile === 1) {
+        map[r][c] = 0;
+        addExplosion(b.x, b.y, 12);
+        bullets.splice(i, 1);
+        continue;
+      } else if (tile === 2) {
+        if (b.power >= 3) map[r][c] = 0;
+        addExplosion(b.x, b.y, 10);
+        bullets.splice(i, 1);
+        continue;
+      } else if (tile === 9) {
+        map[r][c] = 0;
+        addExplosion(c * TILE + 15, r * TILE + 15, 35);
+        bullets.splice(i, 1);
+        gameOver('💥 ฐานทัพถูกทำลาย!', 'นกอินทรีถูกศัตรูยิงพังแล้ว');
+        return;
+      }
+    }
+
+    if (b.isPlayer) {
+      let hit = false;
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const en = enemies[j];
+        if (b.x < en.x + en.w && b.x + b.w > en.x && b.y < en.y + en.h && b.y + b.h > en.y) {
+          addExplosion(en.x + 12, en.y + 12, 22);
+          enemies.splice(j, 1);
+          score += 100;
+          if (Math.random() < 0.35) {
+            const types = ['star', 'bomb', 'shield'];
+            powerups.push({ x: en.x, y: en.y, type: types[Math.floor(Math.random() * types.length)] });
+          }
+          updateHUD();
+          hit = true;
+          break;
+        }
+      }
+      if (hit) { bullets.splice(i, 1); continue; }
+    } else {
+      if (b.x < player.x + player.w && b.x + b.w > player.x && b.y < player.y + player.h && b.y + b.h > player.y) {
+        addExplosion(player.x + 12, player.y + 12, 30);
+        bullets.splice(i, 1);
+        gameOver('💥 ภารกิจล้มเหลว!', 'รถถังของคุณถูกทำลาย');
+        return;
+      }
+    }
+  }
+
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    explosions[i].r += 1.5;
+    explosions[i].life--;
+    if (explosions[i].life <= 0) explosions.splice(i, 1);
+  }
+
+  if (enemiesToSpawn === 0 && enemies.length === 0) {
+    stage++;
+    playSound(440, 880, 0.35, 'triangle');
+    initStage(stage);
+  }
+}
+
+function drawTank(t, mainColor, darkColor) {
+  ctx.save();
+  ctx.translate(t.x + t.w / 2, t.y + t.h / 2);
+  ctx.rotate((t.dir * 90) * Math.PI / 180);
+
+  // สายพานตีนตะขาบ
+  ctx.fillStyle = '#4a5568';
+  ctx.fillRect(-12, -11, 5, 22);
+  ctx.fillRect(7, -11, 5, 22);
+  ctx.fillStyle = '#1a202c';
+  const offset = (Math.floor(t.tread / 4) % 2) * 4;
+  for (let y = -10 + offset; y < 10; y += 6) {
+    ctx.fillRect(-12, y, 5, 2);
+    ctx.fillRect(7, y, 5, 2);
+  }
+
+  // ตัวถังรถถัง
+  ctx.fillStyle = mainColor;
+  ctx.fillRect(-8, -9, 16, 18);
+
+  // ป้อมปืนและลำกล้อง
+  ctx.fillStyle = darkColor;
+  ctx.fillRect(-5, -5, 10, 10);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(-2, -14, 4, 11);
+
+  ctx.restore();
+}
+
+function draw() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 390, 390);
+
+  // วาดพื้นหลังบล็อก
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const x = c * TILE;
+      const y = r * TILE;
+      const t = map[r][c];
+      if (t === 1) {
+        ctx.fillStyle = '#c84b31';
+        ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+        ctx.strokeStyle = '#2d142c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE / 2 - 1);
+      } else if (t === 2) {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(x + 6, y + 6, TILE - 12, TILE - 12);
+      } else if (t === 4) {
+        ctx.fillStyle = '#1d4ed8';
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillRect(x + 4, y + 8, 12, 2);
+      } else if (t === 9) {
+        ctx.fillStyle = '#ffd166';
+        ctx.beginPath();
+        ctx.arc(x + 15, y + 15, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🦅', x + 15, y + 16);
+      }
+    }
+  }
+
+  // วาดรถถัง
+  if (player) drawTank(player, '#ffd166', '#f77f00');
+  enemies.forEach(en => drawTank(en, '#ef476f', '#9b2226'));
+
+  // วาดกระสุน
+  bullets.forEach(b => {
+    ctx.fillStyle = b.isPlayer ? '#fff' : '#ff9e00';
+    ctx.beginPath();
+    ctx.arc(b.x + 3, b.y + 3, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // วาดพุ่มไม้ทับรถถัง (ซ่อนตัวได้จริง)
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      if (map[r][c] === 3) {
+        ctx.fillStyle = 'rgba(45, 106, 79, 0.88)';
+        ctx.fillRect(c * TILE + 1, r * TILE + 1, TILE - 2, TILE - 2);
+      }
+    }
+  }
+
+  // วาดไอเทม
+  powerups.forEach(p => {
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#00f5d4';
+    ctx.lineWidth = 2;
+    ctx.fillRect(p.x, p.y, 24, 24);
+    ctx.strokeRect(p.x, p.y, 24, 24);
+    ctx.font = '15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const icon = p.type === 'star' ? '★' : (p.type === 'bomb' ? '💣' : '🛡️');
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(icon, p.x + 12, p.y + 13);
+  });
+
+  // วาดเอฟเฟกต์ระเบิด
+  explosions.forEach(ex => {
+    ctx.fillStyle = ex.life % 2 === 0 ? '#ffd166' : '#ff5400';
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// วาดฉากตัวอย่างตั้งต้นทันทีตั้งแต่ยังไม่กดเริ่ม
+initStage(1);
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

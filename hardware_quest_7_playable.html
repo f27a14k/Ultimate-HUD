@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hardware Quest 7 - Sensor & Permission Lab</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #070b14;
+    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .status-bar {
+    background: #0f172a;
+    padding: 8px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid #1e293b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .badge-secure { background: #064e3b; color: #34d399; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+  .badge-insecure { background: #78350f; color: #fbbf24; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+
+  .tabs {
+    display: flex;
+    overflow-x: auto;
+    background: #0b1120;
+    border-bottom: 1px solid #1e293b;
+    padding: 6px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    background: #0284c7;
+    color: #fff;
+    border-color: #38bdf8;
+  }
+  .tab-btn.done {
+    border-color: #10b981;
+  }
+
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    overflow-y: auto;
+    gap: 10px;
+  }
+  .card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card h2 { font-size: 17px; color: #38bdf8; }
+  .card p { font-size: 13px; color: #94a3b8; line-height: 1.4; }
+
+  .arena {
+    position: relative;
+    width: 100%;
+    height: 190px;
+    background: #020617;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    flex: 1;
+    min-width: 130px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn-real { background: #059669; color: #fff; }
+  .btn-real:active { background: #047857; }
+  .btn-sim { background: #7c3aed; color: #fff; }
+  .btn-sim:active { background: #6d28d9; }
+  .btn-sub { background: #334155; color: #f8fafc; padding: 8px 10px; min-width: 60px; }
+
+  .log-box {
+    background: #020617;
+    border-top: 1px solid #1e293b;
+    padding: 8px 12px;
+    height: 76px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11px;
+    color: #34d399;
+    flex-shrink: 0;
+  }
+  .log-err { color: #f87171; }
+  .log-warn { color: #fbbf24; }
+
+  /* Mission Specific Elements */
+  .rocket {
+    position: absolute;
+    bottom: 10px;
+    font-size: 32px;
+    transition: bottom 0.1s linear;
+  }
+  .goal-line {
+    position: absolute;
+    top: 22px;
+    left: 0;
+    right: 0;
+    border-top: 2px dashed #fbbf24;
+    text-align: right;
+    padding-right: 8px;
+    font-size: 11px;
+    color: #fbbf24;
+  }
+  .ball {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: #38bdf8;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #38bdf8;
+  }
+  .portal {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    border: 3px solid #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #10b981;
+    top: 24px;
+    right: 28px;
+  }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .radar-scan {
+    position: absolute;
+    inset: 0;
+    border: 2px solid rgba(56, 189, 248, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 1px 4px #000;
+  }
+</style>
+</head>
+<body>
+
+<div class="status-bar">
+  <span>Hardware Quest 7</span>
+  <span id="contextBadge" class="badge-insecure">Checking...</span>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab-btn active" onclick="switchTab(0)">1. 🎤 เสียง</button>
+  <button class="tab-btn" onclick="switchTab(1)">2. 🧭 เอียง</button>
+  <button class="tab-btn" onclick="switchTab(2)">3. 📷 กล้อง</button>
+  <button class="tab-btn" onclick="switchTab(3)">4. 🎮 จอย</button>
+  <button class="tab-btn" onclick="switchTab(4)">5. 📳 สั่น</button>
+  <button class="tab-btn" onclick="switchTab(5)">6. 📍 GPS</button>
+  <button class="tab-btn" onclick="switchTab(6)">7. 💡 แสง</button>
+</div>
+
+<div class="stage" id="stage"></div>
+
+<div class="log-box" id="logBox">
+  <div>[SYSTEM] พร้อมทดสอบฮาร์ดแวร์และโหมดจำลอง...</div>
+</div>
+
+<script>
+  const logBox = document.getElementById('logBox');
+  const contextBadge = document.getElementById('contextBadge');
+  const stage = document.getElementById('stage');
+  const tabBtns = document.querySelectorAll('.tab-btn');
+
+  let completed = [false, false, false, false, false, false, false];
+  let activeCleanup = null;
+
+  function log(msg, type = 'ok') {
+    const div = document.createElement('div');
+    if (type === 'err') div.className = 'log-err';
+    if (type === 'warn') div.className = 'log-warn';
+    const time = new Date().toLocaleTimeString('th-TH', { hour12: false });
+    div.textContent = `[${time}] ${msg}`;
+    logBox.appendChild(div);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  // ตรวจสอบ Secure Context
+  if (window.isSecureContext) {
+    contextBadge.textContent = 'Secure Context (localhost/https) ✅';
+    contextBadge.className = 'badge-secure';
+    log('ตรวจพบ Secure Context: สามารถกดขอสิทธิ์ฮาร์ดแวร์จริงได้เต็มรูปแบบ');
+  } else {
+    contextBadge.textContent = 'File Mode (ใช้ปุ่มจำลองได้ทันที) ⚠️';
+    contextBadge.className = 'badge-insecure';
+    log('ตรวจพบโหมดไฟล์ตรง (file://): เบราว์เซอร์จะบล็อกป๊อปอัปขอสิทธิ์จริง แต่กดปุ่มสีม่วงเพื่อจำลองเล่นได้ทุกข้อ', 'warn');
+  }
+
+  function markDone(idx) {
+    if (!completed[idx]) {
+      completed[idx] = true;
+      tabBtns[idx].classList.add('done');
+      tabBtns[idx].textContent += ' ✓';
+      log(`ภารกิจที่ ${idx + 1} สำเร็จ! ปลดล็อกเครื่องหมายผ่านด่านแล้ว`);
+    }
+  }
+
+  function switchTab(idx) {
+    if (activeCleanup) {
+      activeCleanup();
+      activeCleanup = null;
+    }
+    tabBtns.forEach((b, i) => b.classList.toggle('active', i === idx));
+    renderMission(idx);
+  }
+
+  function renderMission(idx) {
+    if (idx === 0) {
+      // 1. Microphone
+      stage.innerHTML = `
+        <div class="card">
+          <h2>1. 🎤 ไมโครโฟน (Scream Rocket)</h2>
+          <p>ส่งเสียงพูด ตะโกน หรือกดปุ่มจำลองเสียง เพื่อดันจรวดให้พุ่งขึ้นไปแตะเส้นชัยสีทอง</p>
+          <div class="arena">
+            <div class="goal-line">เส้นชัย (100%)</div>
+            <div class="rocket" id="rocket">🚀</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnMicReal">🟢 ขอสิทธิ์ไมค์จริง</button>
+            <button class="btn btn-sim" id="btnMicSim">🟣 กดค้างจำลองเสียง</button>
+          </div>
+        </div>
+      `;
+      let rocketY = 10;
+      let simHold = false;
+      let micLevel = 0;
+      let streamRef = null;
+      let animId = null;
+
+      const rocket = document.getElementById('rocket');
+      function updateRocket() {
+        const power = simHold ? 65 : micLevel;
+        if (power > 15) {
+          rocketY = Math.min(155, rocketY + (power * 0.08));
+        } else {
+          rocketY = Math.max(10, rocketY - 1.8);
+        }
+        rocket.style.bottom = rocketY + 'px';
+        if (rocketY >= 145) markDone(0);
+        animId = requestAnimationFrame(updateRocket);
+      }
+      updateRocket();
+
+      const btnSim = document.getElementById('btnMicSim');
+      btnSim.addEventListener('touchstart', (e) => { e.preventDefault(); simHold = true; });
+      btnSim.addEventListener('touchend', () => { simHold = false; });
+      btnSim.addEventListener('mousedown', () => { simHold = true; });
+      btnSim.addEventListener('mouseup', () => { simHold = false; });
+
+      document.getElementById('btnMicReal').onclick = async () => {
+        try {
+          log('กำลังส่งคำขอสิทธิ์ไมโครโฟน (getUserMedia)...');
+          streamRef = await navigator.mediaDevices.getUserMedia({ audio: true });
+          log('ได้รับสิทธิ์ไมโครโฟนสำเร็จ! ลองส่งเสียงพูดใส่ไมค์ได้เลย');
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const src = audioCtx.createMediaStreamSource(streamRef);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const readMic = () => {
+            if (!streamRef) return;
+            analyser.getByteFrequencyData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            micLevel = sum / data.length;
+            requestAnimationFrame(readMic);
+          };
+          readMic();
+        } catch (err) {
+          log(`เบราว์เซอร์ปฏิเสธสิทธิ์ไมค์: ${err.name} (ให้ใช้ปุ่มสีม่วงจำลองแทน)`, 'err');
+        }
+      };
+
+      activeCleanup = () => {
+        cancelAnimationFrame(animId);
+        if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
+      };
+    }
+
+    else if (idx === 1) {
+      // 2. Gyroscope
+      stage.innerHTML = `
+        <div class="card">
+          <h2>2. 🧭 ไจโรสโคป (Gyro Portal)</h2>
+          <p>เอียงมือถือหรือกดปุ่มทิศทางจำลอง เพื่อกลิ้งลูกบอลสีฟ้าลงสู่ประตูวาร์ปสีเขียว</p>
+          <div class="arena" id="gyroArena">
+            <div class="portal"></div>
+            <div class="ball" id="gyroBall" style="left: 30px; top: 140px;"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnGyroReal">🟢 เปิดเซ็นเซอร์เอียงจริง</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-sim btn-sub" onclick="nudgeBall(-18, 0)">◀ ซ้าย</button>
+            <button class="btn btn-sim btn-sub" onclick="nudgeBall(0, -18)">▲ ขึ้น</button>
+            <button class="btn btn-sim btn-sub" onclick="nudgeBall(0, 18)">▼ ลง</button>
+            <button class="btn btn-sim btn-sub" onclick="nudgeBall(18, 0)">▶ ขวา</button>
+          </div>
+        </div>
+      `;
+      let bx = 30, by = 140;
+      const ball = document.getElementById('gyroBall');
+      const arena = document.getElementById('gyroArena');
+
+      window.nudgeBall = (dx, dy) => {
+        const maxX = arena.clientWidth - 28;
+        const maxY = arena.clientHeight - 28;
+        bx = Math.max(4, Math.min(maxX, bx + dx));
+        by = Math.max(4, Math.min(maxY, by + dy));
+        ball.style.left = bx + 'px';
+        ball.style.top = by + 'px';
+        if (bx > maxX - 65 && by < 65) markDone(1);
+      };
+
+      const onOrient = (e) => {
+        if (e.gamma !== null && e.beta !== null) {
+          window.nudgeBall(e.gamma * 0.25, (e.beta - 45) * 0.25);
+        }
+      };
+
+      document.getElementById('btnGyroReal').onclick = async () => {
+        try {
+          if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            const res = await DeviceOrientationEvent.requestPermission();
+            if (res !== 'granted') throw new Error('Permission denied');
+          }
+          window.addEventListener('deviceorientation', onOrient);
+          log('เปิดรับค่าเซ็นเซอร์ DeviceOrientation แล้ว ลองเอียงเครื่องดูครับ');
+        } catch (err) {
+          log(`ไม่สามารถอ่านค่าไจโรสโคปได้: ${err.message} (ใช้ปุ่มจำลองด้านล่างแทน)`, 'err');
+        }
+      };
+
+      activeCleanup = () => window.removeEventListener('deviceorientation', onOrient);
+    }
+
+    else if (idx === 2) {
+      // 3. Camera
+      stage.innerHTML = `
+        <div class="card">
+          <h2>3. 📷 กล้องหน้า (Motion Radar)</h2>
+          <p>เปิดกล้องหน้าเพื่อตรวจจับการเคลื่อนไหว หรือกดจำลองเรดาร์ให้ครบ 100%</p>
+          <div class="arena">
+            <video id="camVid" autoplay playsinline muted></video>
+            <div class="radar-scan" id="radarText">เรดาร์ตรวจจับ: 0%</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnCamReal">🟢 ขอสิทธิ์กล้องหน้าจริง</button>
+            <button class="btn btn-sim" id="btnCamSim">🟣 กดจำลองเรดาร์ +25%</button>
+          </div>
+        </div>
+      `;
+      let progress = 0;
+      let camStream = null;
+      const radarText = document.getElementById('radarText');
+
+      function addProgress(val) {
+        progress = Math.min(100, progress + val);
+        radarText.textContent = `เรดาร์ตรวจจับ: ${progress}%`;
+        if (progress >= 100) markDone(2);
+      }
+
+      document.getElementById('btnCamSim').onclick = () => {
+        addProgress(25);
+        log(`จำลองการตรวจจับการขยับหน้ากล้อง (${progress}%)`);
+      };
+
+      document.getElementById('btnCamReal').onclick = async () => {
+        try {
+          log('กำลังส่งคำขอสิทธิ์กล้องหน้า (getUserMedia)...');
+          camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+          document.getElementById('camVid').srcObject = camStream;
+          log('เปิดกล้องหน้าสำเร็จ! กำลังสแกนการเคลื่อนไหว...');
+          const timer = setInterval(() => {
+            if (!camStream) return clearInterval(timer);
+            addProgress(20);
+          }, 800);
+        } catch (err) {
+          log(`เบราว์เซอร์ปฏิเสธสิทธิ์กล้อง: ${err.name} (กดปุ่มสีม่วงจำลองแทนได้ครับ)`, 'err');
+        }
+      };
+
+      activeCleanup = () => {
+        if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+      };
+    }
+
+    else if (idx === 3) {
+      // 4. Gamepad
+      stage.innerHTML = `
+        <div class="card">
+          <h2>4. 🎮 จอยเกม (Gamepad API)</h2>
+          <p>เชื่อมต่อจอย Bluetooth/USB แล้วกดปุ่มบนจอย หรือกดจำลองสัญญาณปุ่มจอยคอนโซล</p>
+          <div class="arena">
+            <div id="padStatus" style="text-align:center; font-size:15px; color:#94a3b8;">
+              🎮 สถานะ: รอรับสัญญาณปุ่มกด...
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnPadCheck">🟢 สแกนหาจอยเกม</button>
+            <button class="btn btn-sim" id="btnPadSim">🟣 จำลองกดปุ่ม [X / A]</button>
+          </div>
+        </div>
+      `;
+      const padStatus = document.getElementById('padStatus');
+      let padLoop = null;
+
+      document.getElementById('btnPadSim').onclick = () => {
+        padStatus.innerHTML = '🎮 ได้รับสัญญาณจำลอง: <strong style="color:#34d399;">Button 0 (A / Cross) PRESSED!</strong>';
+        markDone(3);
+      };
+
+      document.getElementById('btnPadCheck').onclick = () => {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const connected = Array.from(pads).filter(Boolean);
+        if (connected.length > 0) {
+          log(`พบจอยเกมเชื่อมต่ออยู่: ${connected[0].id}`);
+        } else {
+          log('ยังไม่พบจอย Bluetooth/USB เชื่อมต่อ (ลองกดปุ่มบนจอยหรือใช้ปุ่มจำลองสีม่วง)', 'warn');
+        }
+        padLoop = setInterval(() => {
+          const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null;
+          if (gp) {
+            const pressedIdx = gp.buttons.findIndex(b => b.pressed);
+            if (pressedIdx !== -1) {
+              padStatus.innerHTML = `🎮 จอยจริงทำงาน: <strong style="color:#34d399;">Button [${pressedIdx}] PRESSED!</strong>`;
+              markDone(3);
+            }
+          }
+        }, 100);
+      };
+
+      activeCleanup = () => clearInterval(padLoop);
+    }
+
+    else if (idx === 4) {
+      // 5. Vibration
+      stage.innerHTML = `
+        <div class="card">
+          <h2>5. 📳 ระบบสั่น (Haptic Vibration API)</h2>
+          <p>สั่งให้มอเตอร์ในมือถือสั่นเป็นรหัส 3 จังหวะ (ไม่ต้องขอสิทธิ์ป๊อปอัป รันบน Android Chrome ได้ทันที)</p>
+          <div class="arena">
+            <div id="vibIcon" style="font-size:48px;">🔒</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnVibReal">🟢 สั่งมือถือสั่นจริง (3 จังหวะ)</button>
+            <button class="btn btn-sim" id="btnVibSim">🟣 จำลองการสั่นบนจอ</button>
+          </div>
+        </div>
+      `;
+      const vibIcon = document.getElementById('vibIcon');
+      function triggerVisualShake() {
+        vibIcon.textContent = '🔓 ปลดล็อกสำเร็จ!';
+        vibIcon.style.fontSize = '24px';
+        vibIcon.style.color = '#34d399';
+        markDone(4);
+      }
+
+      document.getElementById('btnVibReal').onclick = () => {
+        if ('vibrate' in navigator) {
+          const ok = navigator.vibrate([150, 80, 150, 80, 300]);
+          log(`ส่งคำสั่ง navigator.vibrate([150,80,150,80,300]) -> ผลลัพธ์: ${ok}`);
+          triggerVisualShake();
+        } else {
+          log('เบราว์เซอร์หรืออุปกรณ์นี้ไม่รองรับ Vibration API (เช่น iOS Safari)', 'warn');
+        }
+      };
+
+      document.getElementById('btnVibSim').onclick = () => {
+        log('จำลองเอฟเฟกต์ Haptic Feedback 3 จังหวะ');
+        triggerVisualShake();
+      };
+    }
+
+    else if (idx === 5) {
+      // 6. Geolocation GPS
+      stage.innerHTML = `
+        <div class="card">
+          <h2>6. 📍 พิกัด GPS (Geolocation API)</h2>
+          <p>ดึงพิกัดละติจูดและลองจิจูดจริงของอุปกรณ์ หรือจำลองการปักหมุดแผนที่</p>
+          <div class="arena">
+            <div id="gpsDisplay" style="text-align:center; font-size:14px; color:#38bdf8; padding:10px;">
+              🛰️ รอสัญญาณดาวเทียม GPS...
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnGpsReal">🟢 ขอสิทธิ์ GPS จริง</button>
+            <button class="btn btn-sim" id="btnGpsSim">🟣 จำลองพิกัดแผนที่</button>
+          </div>
+        </div>
+      `;
+      const gpsDisplay = document.getElementById('gpsDisplay');
+
+      document.getElementById('btnGpsSim').onclick = () => {
+        gpsDisplay.innerHTML = '📍 พิกัดจำลอง: <strong>18.7883° N, 98.9853° E</strong><br><span style="color:#34d399;">(ปักหมุดสำเร็จ)</span>';
+        markDone(5);
+      };
+
+      document.getElementById('btnGpsReal').onclick = () => {
+        if (!('geolocation' in navigator)) {
+          return log('อุปกรณ์ไม่รองรับ Geolocation API', 'err');
+        }
+        log('กำลังขอสิทธิ์ตำแหน่ง GPS (getCurrentPosition)...');
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude.toFixed(5);
+            const lon = pos.coords.longitude.toFixed(5);
+            gpsDisplay.innerHTML = `📍 พิกัดจริงของคุณ:<br><strong>${lat}° N, ${lon}° E</strong>`;
+            log(`รับพิกัด GPS สำเร็จ: ${lat}, ${lon}`);
+            markDone(5);
+          },
+          (err) => {
+            log(`เบราว์เซอร์ปฏิเสธสิทธิ์ GPS: ${err.message} (กดปุ่มสีม่วงจำลองแทนได้ครับ)`, 'err');
+          },
+          { timeout: 8000 }
+        );
+      };
+    }
+
+    else if (idx === 6) {
+      // 7. Ambient Light
+      stage.innerHTML = `
+        <div class="card">
+          <h2>7. 💡 เซ็นเซอร์วัดแสง (Ambient Light)</h2>
+          <p>อ่านค่าความสว่างรอบตัว (Lux) หรือเลื่อนแถบจำลองความสว่างเพื่อเปิดไฟในห้องมืด</p>
+          <div class="arena" id="lightArena" style="background:#020617;">
+            <div id="lightStatus" style="font-size:16px; font-weight:bold;">🌑 ความสว่าง: 10 Lux (มืด)</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-real" id="btnLightReal">🟢 อ่านเซ็นเซอร์แสงจริง</button>
+            <button class="btn btn-sim" id="btnLightSim">🟣 จำลองเปิดไฟสว่าง (500 Lux)</button>
+          </div>
+        </div>
+      `;
+      const lightArena = document.getElementById('lightArena');
+      const lightStatus = document.getElementById('lightStatus');
+
+      function setLux(lux) {
+        const bright = Math.min(1, lux / 500);
+        lightArena.style.background = `rgba(253, 224, 71, ${bright * 0.35})`;
+        lightStatus.textContent = `☀️ ความสว่าง: ${lux} Lux`;
+        if (lux >= 300) markDone(6);
+      }
+
+      document.getElementById('btnLightSim').onclick = () => {
+        setLux(500);
+        log('จำลองค่าความสว่าง Ambient Light = 500 Lux สำเร็จ');
+      };
+
+      document.getElementById('btnLightReal').onclick = () => {
+        try {
+          if ('AmbientLightSensor' in window) {
+            const sensor = new AmbientLightSensor();
+            sensor.addEventListener('reading', () => setLux(sensor.illuminance));
+            sensor.start();
+            log('เปิดอ่านค่า AmbientLightSensor สำเร็จ');
+          } else {
+            throw new Error('AmbientLightSensor ไม่เปิดใช้งานในเบราว์เซอร์เวอร์ชันนี้');
+          }
+        } catch (err) {
+          log(`${err.message} (กดปุ่มสีม่วงจำลองแทนได้เลยครับ)`, 'warn');
+        }
+      };
+    }
+  }
+
+  renderMission(0);
+</script>
+</body>
+</html>

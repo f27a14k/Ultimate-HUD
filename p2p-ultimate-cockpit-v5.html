@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>P2P Ultimate Cockpit (v5)</title>
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --card: #161822;
+      --primary: #00e676;
+      --secondary: #2979ff;
+      --accent: #ff9100;
+      --danger: #ff1744;
+      --text: #f0f0f0;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      margin: 0; padding: 12px;
+      background-color: var(--bg); color: var(--text);
+      overscroll-behavior: none;
+    }
+    .card {
+      background: var(--card); border-radius: 12px;
+      padding: 14px; margin-bottom: 12px;
+      border: 1px solid #262936;
+    }
+    h2, h3 { margin: 0 0 10px 0; font-size: 17px; }
+    input, select, button {
+      width: 100%; padding: 10px; margin-top: 6px;
+      border-radius: 8px; border: none; font-size: 14px;
+    }
+    input, select { background: #222533; color: white; border: 1px solid #363b4e; }
+    button {
+      background: var(--primary); color: #000;
+      font-weight: bold; cursor: pointer;
+      transition: transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    button.blue { background: var(--secondary); color: white; }
+    button.orange { background: var(--accent); color: #000; }
+    button.red { background: var(--danger); color: white; }
+    button.dark { background: #2c3040; color: #ddd; border: 1px solid #444; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .status-badge {
+      display: inline-block; padding: 4px 10px;
+      border-radius: 20px; font-size: 11px; font-weight: bold;
+      background: #2c3040; color: #aaa;
+    }
+    .status-badge.online { background: rgba(0, 230, 118, 0.2); color: var(--primary); }
+    
+    /* Video Stream Container */
+    .video-box {
+      position: relative; width: 100%; background: #000;
+      border-radius: 10px; overflow: hidden; border: 1px solid #333;
+      aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center;
+    }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    .video-overlay {
+      position: absolute; top: 8px; left: 8px;
+      background: rgba(0,0,0,0.65); padding: 4px 8px;
+      border-radius: 6px; font-size: 11px; color: var(--primary);
+      pointer-events: none;
+    }
+
+    /* Virtual Touch Joysticks */
+    .touch-deck {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 4px; user-select: none; touch-action: none;
+    }
+    .v-stick-base {
+      width: 115px; height: 115px; background: #1e212d;
+      border-radius: 50%; position: relative; border: 2px solid #3a4056;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.6);
+    }
+    .v-stick-knob {
+      width: 44px; height: 44px; background: var(--primary);
+      border-radius: 50%; position: absolute;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      box-shadow: 0 4px 10px rgba(0, 230, 118, 0.4);
+      pointer-events: none;
+    }
+    .v-stick-knob.right { background: var(--secondary); box-shadow: 0 4px 10px rgba(41, 121, 255, 0.4); }
+    .action-pad {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 95px;
+    }
+    .action-btn {
+      height: 44px; margin: 0; border-radius: 50%; font-size: 13px;
+      background: #282c3c; color: #fff; border: 1px solid #454c66;
+      display: flex; align-items: center; justify-content: center;
+      touch-action: manipulation;
+    }
+    .action-btn:active, .action-btn.pressed {
+      background: var(--accent); color: #000; border-color: #fff;
+    }
+
+    /* Code Editor */
+    textarea.code-editor {
+      width: 100%; height: 150px; background: #08090c;
+      color: #00e676; font-family: 'Courier New', monospace;
+      font-size: 12px; padding: 10px; border-radius: 8px;
+      border: 1px solid #333; resize: vertical; line-height: 1.4;
+      margin-top: 8px;
+    }
+    .log-box {
+      background: #050608; color: #8be9fd; font-family: monospace;
+      font-size: 11px; height: 110px; overflow-y: auto;
+      padding: 8px; border-radius: 8px; margin-top: 8px;
+      border: 1px solid #222;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. หน้าตั้งค่าเริ่มต้น -->
+  <div class="card" id="setupPanel">
+    <h2>🚀 P2P Ultimate Cockpit (v5)</h2>
+    <p style="font-size:12px; color:#aaa; margin:0 0 10px 0;">
+      ครบเครื่อง: กล้องสด + จอยสัมผัสบนจอ + จอย USB + เขียนโค้ดสั่งงานบอร์ดข้ามเครื่อง
+    </p>
+    <label style="font-size:12px;">ชื่อห้องเครือข่าย (ต้องตรงกันทั้งสองเครื่อง):</label>
+    <input type="text" id="roomInput" value="cockpit-room-01">
+    
+    <label style="display:block; margin-top:10px; font-size:12px;">เลือกบทบาทของมือถือเครื่องนี้:</label>
+    <select id="roleSelect">
+      <option value="controller">🎮 Controller (จอบังคับ + ดูภาพสด + เขียนโค้ด)</option>
+      <option value="bridge">🤖 Hardware Bridge (ติดหุ่นยนต์: กล้อง + ต่อบอร์ด)</option>
+    </select>
+
+    <button id="btnConnect" style="margin-top:14px;">⚡ เข้าสู่ระบบ Cockpit</button>
+  </div>
+
+  <!-- 2. แถบสถานะ -->
+  <div class="card hidden" id="statusPanel" style="padding:10px 14px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span id="roleDisplay" style="font-weight:bold; font-size:14px;"></span>
+      <span id="peerCount" class="status-badge">รอเชื่อมต่อ... (0)</span>
+    </div>
+    <div style="font-size:11px; color:#888; margin-top:4px; display:flex; justify-content:space-between;">
+      <span>USB Pad: <b id="usbPadStatus" style="color:#aaa;">ไม่พบ</b></span>
+      <span>HW Board: <b id="hwStatus" style="color:#aaa;">ยังไม่ต่อ</b></span>
+      <span>WakeLock: <b id="wakeStatus">ปิด</b></span>
+    </div>
+  </div>
+
+  <!-- 3. หน้าจอฝั่ง CONTROLLER (ตัวบังคับ) -->
+  <div class="hidden" id="controllerPanel">
+    <!-- จอภาพสดจากหุ่นยนต์ -->
+    <div class="card" style="padding:10px;">
+      <div class="video-box">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div class="video-overlay" id="videoStatus">📡 รอสัญญาณภาพจากฝั่ง Bridge...</div>
+      </div>
+      <div style="font-size:11px; color:#00e676; font-family:monospace; margin-top:6px; text-align:center;" id="telemetryLine">
+        JOY: LX:0.00 LY:0.00 | RX:0.00 RY:0.00 | BTN:none
+      </div>
+    </div>
+
+    <!-- จอยสติ๊กสัมผัสบนหน้าจอ (Virtual Dual-Stick + ปุ่มกด) -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <h3 style="margin:0;">🕹️ จอยควบคุม (สัมผัสจอ / USB)</h3>
+        <span style="font-size:11px; color:#888;">ลากนิ้วหรือเสียบจอย USB</span>
+      </div>
+      <div class="touch-deck">
+        <!-- คันโยกซ้าย -->
+        <div class="v-stick-base" id="leftStickBase">
+          <div class="v-stick-knob" id="leftStickKnob"></div>
+        </div>
+
+        <!-- ปุ่มกด A B X Y -->
+        <div class="action-pad">
+          <button class="action-btn" data-btn="0">A</button>
+          <button class="action-btn" data-btn="1">B</button>
+          <button class="action-btn" data-btn="2">X</button>
+          <button class="action-btn" data-btn="3">Y</button>
+        </div>
+
+        <!-- คันโยกขวา -->
+        <div class="v-stick-base" id="rightStickBase">
+          <div class="v-stick-knob right" id="rightStickKnob"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- หน้าต่างเขียนโค้ดสั่งงานสดข้ามเครื่อง -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">💻 Remote Live Coder</h3>
+        <span style="font-size:11px; color:var(--accent);">รันโค้ดที่บอร์ดปลายทาง</span>
+      </div>
+      <textarea class="code-editor" id="remoteCodeEditor">// โค้ดนี้จะถูกส่งไปรันบนเครื่องที่ต่อบอร์ดอยู่
+// คำสั่งที่ใช้ได้: await send("ข้อความ\n"), await sleep(ms)
+
+for (let i = 0; i < 3; i++) {
+  log("สั่งเปิดไฟรอบที่ " + (i + 1));
+  await send("CMD:LED_ON\n");
+  await sleep(400);
+  await send("CMD:LED_OFF\n");
+  await sleep(400);
+}
+log("ทำงานเสร็จสิ้น!");</textarea>
+      <div class="grid-2">
+        <button class="orange" onclick="pushCodeToBridge()">🚀 ส่งโค้ดไปรันที่บอร์ด</button>
+        <button class="red" onclick="stopCodeOnBridge()">⏹️ สั่งหยุดสคริปต์</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. หน้าจอฝั่ง HARDWARE BRIDGE (ติดหุ่นยนต์ / หน้างาน) -->
+  <div class="hidden" id="bridgePanel">
+    <!-- กล้องสตรีมสด -->
+    <div class="card">
+      <h3>📷 ระบบกล้องสตรีมสด (Eye Node)</h3>
+      <div class="video-box" style="aspect-ratio: 4/3; max-height: 200px;">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="video-overlay" id="camOverlay">กล้องปิดอยู่</div>
+      </div>
+      <div class="grid-2" style="margin-top:8px;">
+        <button class="blue" onclick="startCamera('environment')">📷 เปิดกล้องหลัง</button>
+        <button class="dark" onclick="startCamera('user')">🤳 เปิดกล้องหน้า</button>
+      </div>
+    </div>
+
+    <!-- เชื่อมต่อบอร์ด ESP32 / Arduino -->
+    <div class="card">
+      <h3>🔌 เชื่อมต่อบอร์ดฮาร์ดแวร์</h3>
+      <div class="grid-2">
+        <button class="blue" onclick="connectBLE()">📶 Bluetooth BLE</button>
+        <button class="orange" onclick="connectUSBOTG()">🔌 สาย USB OTG</button>
+      </div>
+      <div class="grid-2" style="margin-top:6px;">
+        <button class="dark" onclick="writeHardware('CMD:LED_ON\n')">💡 เทสเปิดไฟ</button>
+        <button class="dark" onclick="writeHardware('CMD:LED_OFF\n')">🌑 เทสปิดไฟ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. กล่อง Monitor Log ร่วมกัน -->
+  <div class="card hidden" id="logPanel">
+    <div style="display:flex; justify-content:space-between;">
+      <strong style="font-size:12px;">📡 System & Serial Monitor</strong>
+      <span style="font-size:11px; color:#888; cursor:pointer;" onclick="document.getElementById('logBox').innerHTML=''">ล้างจอ</span>
+    </div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <script type="module">
+    import { joinRoom } from 'https://esm.run/trystero/torrent';
+
+    let room, sendPacket, myRole = '';
+    const peers = new Set();
+    let localStream = null;
+
+    // สถานะจอยสติ๊กปัจจุบัน (รวมทั้งจากจอสัมผัสและจอย USB)
+    const joyState = { lx: 0, ly: 0, rx: 0, ry: 0, touchBtns: new Set(), usbBtns: [] };
+    let lastSentJoy = '';
+
+    // ตัวแปรฮาร์ดแวร์ฝั่ง Bridge
+    let bleChar = null;
+    let usbDevice = null, usbOutEp = 0, usbInEp = 0;
+    let isScriptRunning = false;
+
+    function log(msg) {
+      const box = document.getElementById('logBox');
+      const t = new Date().toLocaleTimeString();
+      box.innerHTML += `<div>[${t}] ${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function enableWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          await navigator.wakeLock.request('screen');
+          document.getElementById('wakeStatus').innerText = 'ทำงาน ✅';
+          document.getElementById('wakeStatus').style.color = '#00e676';
+        }
+      } catch (e) {}
+    }
+
+    // เริ่มเข้าสู่ระบบ
+    document.getElementById('btnConnect').addEventListener('click', () => {
+      const roomName = document.getElementById('roomInput').value.trim();
+      if (!roomName) return alert('กรุณาตั้งชื่อห้อง');
+      myRole = document.getElementById('roleSelect').value;
+
+      document.getElementById('setupPanel').classList.add('hidden');
+      document.getElementById('statusPanel').classList.remove('hidden');
+      document.getElementById('logPanel').classList.remove('hidden');
+
+      if (myRole === 'controller') {
+        document.getElementById('roleDisplay').innerText = '🎮 Controller Cockpit';
+        document.getElementById('controllerPanel').classList.remove('hidden');
+        setupVirtualSticks();
+        startInputLoop();
+      } else {
+        document.getElementById('roleDisplay').innerText = '🤖 Hardware Bridge';
+        document.getElementById('bridgePanel').classList.remove('hidden');
+      }
+
+      enableWakeLock();
+      initP2P(roomName);
+    });
+
+    // ระบบ P2P & Video Stream
+    function initP2P(roomName) {
+      room = joinRoom({ appId: 'p2p-ultimate-cockpit-v5' }, roomName);
+      const [sendData, getData] = room.makeAction('cockpitData');
+      sendPacket = sendData;
+
+      log(`เข้าร่วมห้อง "${roomName}" สำเร็จ`);
+
+      room.onPeerJoin(peerId => {
+        peers.add(peerId);
+        updatePeerUI();
+        log(`🟢 เชื่อมต่อกับอุปกรณ์: ${peerId.slice(0, 6)}`);
+        if (localStream && myRole === 'bridge') {
+          room.addStream(localStream, peerId);
+        }
+      });
+
+      room.onPeerLeave(peerId => {
+        peers.delete(peerId);
+        updatePeerUI();
+        log(`🔴 อุปกรณ์หลุด: ${peerId.slice(0, 6)}`);
+      });
+
+      // รับภาพวิดีโอสด
+      room.onPeerStream((stream, peerId) => {
+        log(`📹 รับสัญญาณภาพสดจาก ${peerId.slice(0, 6)}`);
+        const vid = document.getElementById('remoteVideo');
+        vid.srcObject = stream;
+        document.getElementById('videoStatus').innerText = '🟢 LIVE STREAM';
+      });
+
+      // รับข้อมูลคำสั่ง P2P
+      getData(async (pkt, peerId) => {
+        if (myRole === 'bridge') {
+          if (pkt.type === 'joy') {
+            await writeHardware(pkt.raw);
+          } else if (pkt.type === 'execCode') {
+            log('📥 ได้รับสคริปต์สั่งงานจาก Controller');
+            runRemoteScript(pkt.code);
+          } else if (pkt.type === 'stopCode') {
+            isScriptRunning = false;
+            log('⏹️ ได้รับคำสั่งหยุดสคริปต์');
+          }
+        } else if (myRole === 'controller') {
+          if (pkt.type === 'bridgeLog') {
+            log(`[Bridge] ${pkt.text}`);
+          }
+        }
+      });
+    }
+
+    function updatePeerUI() {
+      const b = document.getElementById('peerCount');
+      b.innerText = `ออนไลน์ (${peers.size})`;
+      b.classList.toggle('online', peers.size > 0);
+    }
+
+    // ================= 1. ระบบกล้อง (BRIDGE) =================
+    window.startCamera = async (facingMode) => {
+      try {
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('camOverlay').innerText = '🟢 กำลังสตรีมภาพ...';
+        if (room) room.addStream(localStream);
+        log('📷 เปิดกล้องและส่งภาพเข้าเครือข่าย P2P แล้ว');
+      } catch (err) {
+        log('❌ เปิดกล้องไม่สำเร็จ: ' + err.message);
+      }
+    };
+
+    // ================= 2. จอยสัมผัส & จอย USB (CONTROLLER) =================
+    function setupVirtualSticks() {
+      bindStick('leftStickBase', 'leftStickKnob', (x, y) => { joyState.lx = x; joyState.ly = y; });
+      bindStick('rightStickBase', 'rightStickKnob', (x, y) => { joyState.rx = x; joyState.ry = y; });
+
+      document.querySelectorAll('.action-btn').forEach(btn => {
+        const bId = parseInt(btn.dataset.btn);
+        const press = (e) => { e.preventDefault(); joyState.touchBtns.add(bId); btn.classList.add('pressed'); };
+        const release = (e) => { e.preventDefault(); joyState.touchBtns.delete(bId); btn.classList.remove('pressed'); };
+        btn.addEventListener('touchstart', press);
+        btn.addEventListener('touchend', release);
+        btn.addEventListener('mousedown', press);
+        btn.addEventListener('mouseup', release);
+      });
+    }
+
+    function bindStick(baseId, knobId, onMove) {
+      const base = document.getElementById(baseId);
+      const knob = document.getElementById(knobId);
+      let activeTouchId = null;
+
+      const updatePos = (clientX, clientY) => {
+        const rect = base.getBoundingClientRect();
+        const maxR = rect.width / 2 - 22;
+        let dx = clientX - (rect.left + rect.width / 2);
+        let dy = clientY - (rect.top + rect.height / 2);
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxR) {
+          dx = (dx / dist) * maxR;
+          dy = (dy / dist) * maxR;
+        }
+        knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        onMove(+(dx / maxR).toFixed(2), +(dy / maxR).toFixed(2));
+      };
+
+      const resetPos = () => {
+        activeTouchId = null;
+        knob.style.transform = 'translate(-50%, -50%)';
+        onMove(0, 0);
+      };
+
+      base.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        activeTouchId = t.identifier;
+        updatePos(t.clientX, t.clientY);
+      });
+      base.addEventListener('touchmove', e => {
+        e.preventDefault();
+        for (let t of e.changedTouches) {
+          if (t.identifier === activeTouchId) updatePos(t.clientX, t.clientY);
+        }
+      });
+      base.addEventListener('touchend', e => {
+        for (let t of e.changedTouches) {
+          if (t.identifier === activeTouchId) resetPos();
+        }
+      });
+    }
+
+    function startInputLoop() {
+      setInterval(() => {
+        // อ่านค่าจากจอย USB ถ้าเสียบอยู่
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const pad = pads[0] || pads[1];
+        let lx = joyState.lx, ly = joyState.ly, rx = joyState.rx, ry = joyState.ry;
+        const allBtns = new Set(joyState.touchBtns);
+
+        if (pad) {
+          document.getElementById('usbPadStatus').innerText = 'เชื่อมต่อ ✅';
+          document.getElementById('usbPadStatus').style.color = '#00e676';
+          const dz = v => Math.abs(v) < 0.12 ? 0 : +v.toFixed(2);
+          if (dz(pad.axes[0]) !== 0 || dz(pad.axes[1]) !== 0) { lx = dz(pad.axes[0]); ly = dz(pad.axes[1]); }
+          if (dz(pad.axes[2]) !== 0 || dz(pad.axes[3]) !== 0) { rx = dz(pad.axes[2]); ry = dz(pad.axes[3]); }
+          pad.buttons.forEach((b, idx) => { if (b.pressed) allBtns.add(idx); });
+        }
+
+        const btnStr = allBtns.size > 0 ? Array.from(allBtns).join(',') : 'none';
+        const rawCmd = `J:${lx},${ly},${rx},${ry},${btnStr}
+`;
+        document.getElementById('telemetryLine').innerText = `JOY: LX:${lx} LY:${ly} | RX:${rx} RY:${ry} | BTN:${btnStr}`;
+
+        if (rawCmd !== lastSentJoy && sendPacket && peers.size > 0) {
+          lastSentJoy = rawCmd;
+          sendPacket({ type: 'joy', raw: rawCmd });
+        }
+      }, 35); // ~28 Hz
+    }
+
+    // ================= 3. REMOTE LIVE CODER =================
+    window.pushCodeToBridge = () => {
+      const code = document.getElementById('remoteCodeEditor').value;
+      if (!sendPacket || peers.size === 0) return alert('ยังไม่เชื่อมต่อกับฝั่ง Bridge');
+      sendPacket({ type: 'execCode', code: code });
+      log('📤 ส่งสคริปต์ไปรันที่บอร์ดปลายทางแล้ว');
+    };
+
+    window.stopCodeOnBridge = () => {
+      if (sendPacket) sendPacket({ type: 'stopCode' });
+      log('📤 ส่งคำสั่งหยุดสคริปต์แล้ว');
+    };
+
+    async function runRemoteScript(code) {
+      isScriptRunning = false;
+      await new Promise(r => setTimeout(r, 60));
+      isScriptRunning = true;
+
+      const sleep = ms => new Promise((res, rej) => {
+        setTimeout(() => isScriptRunning ? res() : rej('Stopped'), ms);
+      });
+      const send = async (cmd) => {
+        if (!isScriptRunning) throw 'Stopped';
+        await writeHardware(cmd);
+      };
+      const remoteLog = (msg) => {
+        log(msg);
+        if (sendPacket) sendPacket({ type: 'bridgeLog', text: String(msg) });
+      };
+
+      try {
+        const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+        const fn = new AsyncFn('send', 'sleep', 'log', code);
+        await fn(send, sleep, remoteLog);
+      } catch (e) {
+        if (e !== 'Stopped') remoteLog('❌ Script Error: ' + e.message);
+      } finally {
+        isScriptRunning = false;
+      }
+    }
+
+    // ================= 4. ฮาร์ดแวร์ BLE & USB OTG (BRIDGE) =================
+    window.connectBLE = async () => {
+      try {
+        const dev = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+        });
+        const server = await dev.gatt.connect();
+        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        bleChar = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+        document.getElementById('hwStatus').innerText = 'BLE ✅';
+        document.getElementById('hwStatus').style.color = '#00e676';
+        log('🟢 เชื่อมต่อ Bluetooth BLE สำเร็จ');
+      } catch (e) { log('❌ BLE Error: ' + e.message); }
+    };
+
+    window.connectUSBOTG = async () => {
+      try {
+        usbDevice = await navigator.usb.requestDevice({ filters: [] });
+        await usbDevice.open();
+        if (usbDevice.configuration === null) await usbDevice.selectConfiguration(1);
+        for (const iface of usbDevice.configuration.interfaces) {
+          for (const alt of iface.alternates) {
+            if (alt.endpoints.length >= 2) {
+              await usbDevice.claimInterface(iface.interfaceNumber);
+              for (const ep of alt.endpoints) {
+                if (ep.direction === 'out') usbOutEp = ep.endpointNumber;
+                if (ep.direction === 'in') usbInEp = ep.endpointNumber;
+              }
+              break;
+            }
+          }
+          if (usbOutEp) break;
+        }
+        document.getElementById('hwStatus').innerText = 'USB OTG ✅';
+        document.getElementById('hwStatus').style.color = '#00e676';
+        log('🟢 เชื่อมต่อบอร์ดผ่าน USB OTG สำเร็จ');
+      } catch (e) { log('❌ USB OTG Error: ' + e.message); }
+    };
+
+    window.writeHardware = async (str) => {
+      const data = new TextEncoder().encode(str);
+      try {
+        if (bleChar) await bleChar.writeValueWithoutResponse(data);
+        if (usbDevice && usbOutEp) await usbDevice.transferOut(usbOutEp, data);
+      } catch (e) {}
+    };
+  </script>
+</body>
+</html>

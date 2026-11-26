@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hardware Quest 7 - 2026</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #060913;
+    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 12px 16px;
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 {
+    font-size: 16px;
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .progress-pill {
+    background: #1e293b;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #fbbf24;
+  }
+  .nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    background: #090d1a;
+    padding: 8px;
+    gap: 6px;
+    border-bottom: 1px solid #1e293b;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    background: #0284c7;
+    color: #fff;
+    border-color: #38bdf8;
+  }
+  .tab-btn.cleared {
+    border-color: #22c55e;
+    color: #4ade80;
+  }
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .quest-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .quest-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #38bdf8;
+    margin-bottom: 4px;
+  }
+  .quest-desc {
+    font-size: 13px;
+    color: #cbd5e1;
+    line-height: 1.4;
+  }
+  .canvas-box {
+    flex: 1;
+    position: relative;
+    background: #02040a;
+    border: 2px solid #1e293b;
+    border-radius: 14px;
+    overflow: hidden;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas, video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  video {
+    transform: scaleX(-1);
+  }
+  .status-bar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    font-size: 12px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #e2e8f0;
+  }
+  .action-area {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-primary {
+    flex: 1;
+    padding: 13px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    color: #fff;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-fallback {
+    padding: 13px 14px;
+    border-radius: 12px;
+    border: 1px solid #475569;
+    background: #1e293b;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .badge-win {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 78, 59, 0.88);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    z-index: 10;
+  }
+  .badge-win h2 { color: #4ade80; font-size: 22px; margin-bottom: 6px; }
+  .badge-win p { color: #ecfdf5; font-size: 14px; margin-bottom: 14px; }
+  .next-btn {
+    padding: 10px 24px;
+    border-radius: 999px;
+    border: none;
+    background: #22c55e;
+    color: #052e16;
+    font-weight: bold;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧪 HARDWARE QUEST 7</h1>
+  <div class="progress-pill" id="progressText">ผ่านแล้ว 0 / 7 ภารกิจ</div>
+</header>
+
+<div class="nav-tabs" id="tabs"></div>
+
+<main>
+  <div class="quest-card">
+    <div class="quest-title" id="qTitle">ภารกิจที่ 1</div>
+    <div class="quest-desc" id="qDesc">รายละเอียดภารกิจ</div>
+  </div>
+
+  <div class="canvas-box" id="stageBox">
+    <div class="status-bar">
+      <span id="sensorReadout">สถานะ: พร้อมเริ่มภารกิจ</span>
+      <span id="protoBadge"></span>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <video id="camVideo" autoplay playsinline muted style="display:none;"></video>
+    <div class="badge-win" id="winOverlay">
+      <h2>🎉 ผ่านภารกิจสำเร็จ!</h2>
+      <p id="winMsg">ระบบอ่านค่าฮาร์ดแวร์ได้สมบูรณ์</p>
+      <button class="next-btn" onclick="nextMission()">ภารกิจถัดไป ▶</button>
+    </div>
+  </div>
+
+  <div class="action-area" id="actionArea"></div>
+</main>
+
+<script>
+  const isSecureContextReady = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  document.getElementById('protoBadge').textContent = isSecureContextReady ? '🟢 Localhost/HTTPS พร้อม' : '🟡 โหมดไฟล์ (file://)';
+
+  const missions = [
+    {
+      id: 0,
+      short: '1. ไมโครโฟน 🎤',
+      title: 'ภารกิจที่ 1: พลังเสียงสั่งยานทะยาน (Microphone API)',
+      desc: 'โจทย์: กด "เปิดไมโครโฟน" แล้วลองส่งเสียงพูด ตะโกน หรือปรบมือ ให้จรวดพุ่งขึ้นไปแตะเส้นชัยสีทองด้านบน!',
+      apiName: 'Web Audio API (getUserMedia)'
+    },
+    {
+      id: 1,
+      short: '2. ไจโรสโคป 🧭',
+      title: 'ภารกิจที่ 2: เอียงเครื่องกลิ้งลูกบอลลงหลุม (Gyroscope API)',
+      desc: 'โจทย์: กด "เปิดเซ็นเซอร์" แล้วเอียงมือถือซ้าย-ขวา ก้ม-เงย เพื่อกลิ้งลูกบอลพลังงานเข้าสู่ประตูวาร์ปสีเขียว',
+      apiName: 'DeviceOrientation API'
+    },
+    {
+      id: 2,
+      short: '3. กล้องหน้า 📷',
+      title: 'ภารกิจที่ 3: ตรวจจับการเคลื่อนไหวหน้ากล้อง (Camera Motion)',
+      desc: 'โจทย์: กด "เปิดกล้อง" แล้วโบกมือหรือขยับตัวให้แถบพลังงานเคลื่อนไหว (Motion Radar) เต็ม 100%',
+      apiName: 'MediaDevices Video Stream'
+    },
+    {
+      id: 3,
+      short: '4. จอยเกม 🎮',
+      title: 'ภารกิจที่ 4: เชื่อมต่อจอยคอนโทรลเลอร์ (Gamepad API)',
+      desc: 'โจทย์: ต่อจอย Bluetooth/USB แล้วกดปุ่มใดก็ได้บนจอย (หรือใช้ปุ่มจำลองด้านล่างหากยังไม่ได้ต่อจอย)',
+      apiName: 'Navigator.getGamepads()'
+    },
+    {
+      id: 4,
+      short: '5. ระบบสั่น 📳',
+      title: 'ภารกิจที่ 5: ปลดล็อกรหัสผ่านด้วยการสั่น (Vibration API)',
+      desc: 'โจทย์: กดปุ่ม "ส่งสัญญาณสั่น" 3 ครั้ง เพื่อทดสอบมอเตอร์สั่น Haptic Feedback และปลดล็อกตู้เซฟ',
+      apiName: 'Navigator.vibrate()'
+    },
+    {
+      id: 5,
+      short: '6. พิกัด GPS 📍',
+      title: 'ภารกิจที่ 6: สแกนสัญญาณดาวเทียมระบุพิกัด (Geolocation API)',
+      desc: 'โจทย์: กด "สแกนพิกัด GPS" เพื่อดึงค่าละติจูดและลองจิจูดจริงของเครื่องมาปักหมุดบนเรดาร์',
+      apiName: 'Navigator.geolocation'
+    },
+    {
+      id: 6,
+      short: '7. วัดแสง 💡',
+      title: 'ภารกิจที่ 7: เซ็นเซอร์วัดความสว่างรอบตัว (Ambient Light)',
+      desc: 'โจทย์: กด "อ่านค่าแสง" (หากเบราว์เซอร์ไม่เปิดสิทธิ์เซ็นเซอร์แสง ระบบจะเปิดแถบจำลองแสงให้ทดสอบแทน)',
+      apiName: 'AmbientLightSensor API'
+    }
+  ];
+
+  let currentIdx = 0;
+  let cleared = [false, false, false, false, false, false, false];
+  let activeCleanup = null;
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const video = document.getElementById('camVideo');
+  const readout = document.getElementById('sensorReadout');
+  const winOverlay = document.getElementById('winOverlay');
+  const actionArea = document.getElementById('actionArea');
+
+  function resizeCanvas() {
+    const box = document.getElementById('stageBox');
+    canvas.width = box.clientWidth;
+    canvas.height = box.clientHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function renderTabs() {
+    const tabs = document.getElementById('tabs');
+    tabs.innerHTML = '';
+    missions.forEach((m, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (idx === currentIdx ? ' active' : '') + (cleared[idx] ? ' cleared' : '');
+      btn.textContent = (cleared[idx] ? '✅ ' : '') + m.short;
+      btn.onclick = () => selectMission(idx);
+      tabs.appendChild(btn);
+    });
+    const count = cleared.filter(Boolean).length;
+    document.getElementById('progressText').textContent = `ผ่านแล้ว ${count} / 7 ภารกิจ`;
+  }
+
+  function completeMission(msg) {
+    if (!cleared[currentIdx]) {
+      cleared[currentIdx] = true;
+      renderTabs();
+    }
+    document.getElementById('winMsg').textContent = msg;
+    winOverlay.style.display = 'flex';
+    if (navigator.vibrate) navigator.vibrate([80, 50, 120]);
+  }
+
+  function nextMission() {
+    selectMission((currentIdx + 1) % missions.length);
+  }
+
+  function selectMission(idx) {
+    if (activeCleanup) {
+      activeCleanup();
+      activeCleanup = null;
+    }
+    currentIdx = idx;
+    winOverlay.style.display = 'none';
+    video.style.display = 'none';
+    canvas.style.display = 'block';
+    resizeCanvas();
+    renderTabs();
+
+    const m = missions[idx];
+    document.getElementById('qTitle').textContent = m.title;
+    document.getElementById('qDesc').textContent = m.desc;
+    readout.textContent = `API: ${m.apiName}`;
+    actionArea.innerHTML = '';
+
+    if (idx === 0) setupMicMission();
+    if (idx === 1) setupGyroMission();
+    if (idx === 2) setupCameraMission();
+    if (idx === 3) setupGamepadMission();
+    if (idx === 4) setupVibrateMission();
+    if (idx === 5) setupGpsMission();
+    if (idx === 6) setupLightMission();
+  }
+
+  // --- 1. ไมโครโฟน ---
+  function setupMicMission() {
+    let rocketY = canvas.height - 50;
+    let volume = 0;
+    let running = true;
+    let stream = null;
+    let audioCtx = null;
+
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn-primary';
+    btnStart.textContent = '🎤 เปิดไมโครโฟนรับเสียง';
+    btnStart.onclick = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        btnStart.textContent = 'กำลังฟังเสียง... ลองพูดหรือปรบมือ!';
+
+        function pollAudio() {
+          if (!running) return;
+          analyser.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i++) sum += data[i];
+          volume = sum / data.length;
+          requestAnimationFrame(pollAudio);
+        }
+        pollAudio();
+      } catch (err) {
+        readout.textContent = '⚠️ บล็อกไมค์ (ต้องรันบน Localhost/HTTPS) กดปุ่มจำลองเสียงได้';
+      }
+    };
+
+    const btnSim = document.createElement('button');
+    btnSim.className = 'btn-fallback';
+    btnSim.textContent = '🔊 จำลองตะโกน';
+    btnSim.onclick = () => { volume = 75; };
+
+    actionArea.appendChild(btnStart);
+    actionArea.appendChild(btnSim);
+
+    function draw() {
+      if (!running) return;
+      ctx.fillStyle = '#050814';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // เส้นชัยด้านบน
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(0, 45, canvas.width, 4);
+      ctx.fillText('🏁 เส้นชัยระดับความสูง', 14, 38);
+
+      if (volume > 18) {
+        rocketY -= (volume - 15) * 0.22;
+        volume *= 0.9;
+      } else {
+        rocketY = Math.min(canvas.height - 50, rocketY + 2);
+      }
+
+      readout.textContent = `ระดับเสียง: ${Math.round(volume)} dB`;
+
+      // วาดจรวด
+      const cx = canvas.width / 2;
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(cx, rocketY - 25);
+      ctx.lineTo(cx - 18, rocketY + 15);
+      ctx.lineTo(cx + 18, rocketY + 15);
+      ctx.closePath();
+      ctx.fill();
+
+      if (rocketY <= 55) {
+        running = false;
+        completeMission('พลังเสียงของคุณส่งจรวดถึงเป้าหมายสำเร็จ!');
+        return;
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    activeCleanup = () => {
+      running = false;
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (audioCtx) audioCtx.close();
+    };
+  }
+
+  // --- 2. ไจโรสโคป ---
+  function setupGyroMission() {
+    let ball = { x: 50, y: 60, vx: 0, vy: 0 };
+    let tiltX = 0, tiltY = 0;
+    let running = true;
+
+    function onOrient(e) {
+      if (e.gamma !== null) tiltX = e.gamma * 0.15;
+      if (e.beta !== null) tiltY = (e.beta - 35) * 0.15;
+    }
+
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn-primary';
+    btnStart.textContent = '🧭 เปิดไจโรสโคป (เอียงเครื่อง)';
+    btnStart.onclick = async () => {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res === 'granted') window.addEventListener('deviceorientation', onOrient);
+      } else {
+        window.addEventListener('deviceorientation', onOrient);
+      }
+      btnStart.textContent = 'กำลังอ่านค่าความเอียง... เอียงมือถือเลย!';
+    };
+
+    const btnSim = document.createElement('button');
+    btnSim.className = 'btn-fallback';
+    btnSim.textContent = '↘️ จำลองเอียง';
+    btnSim.onclick = () => { tiltX = 3; tiltY = 2.5; };
+
+    actionArea.appendChild(btnStart);
+    actionArea.appendChild(btnSim);
+
+    function draw() {
+      if (!running) return;
+      ctx.fillStyle = '#050814';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const goal = { x: canvas.width - 65, y: canvas.height - 65, r: 26 };
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(goal.x, goal.y, goal.r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ball.vx = (ball.vx + tiltX * 0.2) * 0.92;
+      ball.vy = (ball.vy + tiltY * 0.2) * 0.92;
+      ball.x = Math.max(20, Math.min(canvas.width - 20, ball.x + ball.vx));
+      ball.y = Math.max(45, Math.min(canvas.height - 20, ball.y + ball.vy));
+
+      readout.textContent = `เอียง X: ${tiltX.toFixed(1)} | Y: ${tiltY.toFixed(1)}`;
+
+      ctx.fillStyle = '#f43f5e';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, 15, 0, Math.PI * 2);
+      ctx.fill();
+
+      const dist = Math.hypot(ball.x - goal.x, ball.y - goal.y);
+      if (dist < goal.r) {
+        running = false;
+        completeMission('กลิ้งลูกบอลเข้าประตูวาร์ปด้วยไจโรสโคปสำเร็จ!');
+        return;
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    activeCleanup = () => {
+      running = false;
+      window.removeEventListener('deviceorientation', onOrient);
+    };
+  }
+
+  // --- 3. กล้องหน้าตรวจจับการเคลื่อนไหว ---
+  function setupCameraMission() {
+    let energy = 0;
+    let running = true;
+    let stream = null;
+    let prevFrame = null;
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = 64;
+    offCanvas.height = 48;
+    const offCtx = offCanvas.getContext('2d');
+
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn-primary';
+    btnStart.textContent = '📷 เปิดกล้องตรวจจับท่าทาง';
+    btnStart.onclick = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        canvas.style.display = 'none';
+        btnStart.textContent = 'โบกมือหน้ากล้องเลย!';
+      } catch (e) {
+        readout.textContent = '⚠️ เปิดกล้องไม่ได้ (ต้องใช้ Localhost/HTTPS) กดปุ่มจำลองได้';
+      }
+    };
+
+    const btnSim = document.createElement('button');
+    btnSim.className = 'btn-fallback';
+    btnSim.textContent = '👋 จำลองโบกมือ';
+    btnSim.onclick = () => { energy += 35; };
+
+    actionArea.appendChild(btnStart);
+    actionArea.appendChild(btnSim);
+
+    function checkMotion() {
+      if (!running) return;
+      if (video.readyState === 4) {
+        offCtx.drawImage(video, 0, 0, 64, 48);
+        const frame = offCtx.getImageData(0, 0, 64, 48).data;
+        if (prevFrame) {
+          let diff = 0;
+          for (let i = 0; i < frame.length; i += 16) {
+            diff += Math.abs(frame[i] - prevFrame[i]);
+          }
+          if (diff > 4500) energy += 4;
+        }
+        prevFrame = frame;
+      }
+      readout.textContent = `พลังงานการเคลื่อนไหว: ${Math.min(100, Math.round(energy))}%`;
+      if (energy >= 100) {
+        running = false;
+        completeMission('ตรวจจับการเคลื่อนไหวผ่านกล้องหน้าครบ 100%!');
+        return;
+      }
+      requestAnimationFrame(checkMotion);
+    }
+    checkMotion();
+
+    activeCleanup = () => {
+      running = false;
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
+  }
+
+  // --- 4. จอยเกม Bluetooth/USB ---
+  function setupGamepadMission() {
+    let running = true;
+    const btnSim = document.createElement('button');
+    btnSim.className = 'btn-primary';
+    btnSim.textContent = '🎮 กดปุ่มจำลองสัญญาณจอย (หากไม่มีจอย Bluetooth)';
+    btnSim.onclick = () => completeMission('รับสัญญาณปุ่มกดจาก Gamepad API สำเร็จ!');
+    actionArea.appendChild(btnSim);
+
+    function pollPad() {
+      if (!running) return;
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let connected = false;
+      for (let p of pads) {
+        if (p) {
+          connected = true;
+          readout.textContent = `พบจอย: ${p.id.slice(0, 22)}...`;
+          if (p.buttons.some(b => b.pressed)) {
+            running = false;
+            completeMission(`รับค่าปุ่มกดจากจอย "${p.id.slice(0, 20)}" สำเร็จ!`);
+            return;
+          }
+        }
+      }
+      if (!connected) readout.textContent = 'สถานะ: รอเชื่อมต่อจอย Bluetooth / USB...';
+      requestAnimationFrame(pollPad);
+    }
+    pollPad();
+    activeCleanup = () => { running = false; };
+  }
+
+  // --- 5. ระบบสั่น ---
+  function setupVibrateMission() {
+    let count = 0;
+    const btnVib = document.createElement('button');
+    btnVib.className = 'btn-primary';
+    btnVib.textContent = '📳 กดส่งสัญญาณสั่น (0 / 3 ครั้ง)';
+    btnVib.onclick = () => {
+      count++;
+      if (navigator.vibrate) navigator.vibrate(180);
+      readout.textContent = `สั่งมอเตอร์สั่นไปแล้ว ${count} / 3 ครั้ง`;
+      btnVib.textContent = `📳 กดส่งสัญญาณสั่น (${count} / 3 ครั้ง)`;
+      if (count >= 3) {
+        completeMission('ทดสอบมอเตอร์สั่น Haptic Feedback ครบ 3 จังหวะ!');
+      }
+    };
+    actionArea.appendChild(btnVib);
+  }
+
+  // --- 6. พิกัด GPS ---
+  function setupGpsMission() {
+    const btnGps = document.createElement('button');
+    btnGps.className = 'btn-primary';
+    btnGps.textContent = '📍 ดึงพิกัด GPS ปัจจุบัน';
+    btnGps.onclick = () => {
+      readout.textContent = 'กำลังเชื่อมต่อดาวเทียม GPS...';
+      if (!navigator.geolocation) {
+        readout.textContent = 'อุปกรณ์ไม่รองรับ Geolocation';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(4);
+          const lon = pos.coords.longitude.toFixed(4);
+          readout.textContent = `พิกัด: ${lat}, ${lon}`;
+          completeMission(`ระบุพิกัดดาวเทียมสำเร็จ (Lat: ${lat}, Lon: ${lon})`);
+        },
+        (err) => {
+          readout.textContent = '⚠️ ไม่ได้รับสิทธิ์ GPS (กดปุ่มจำลองด้านขวาได้)';
+        }
+      );
+    };
+
+    const btnSim = document.createElement('button');
+    btnSim.className = 'btn-fallback';
+    btnSim.textContent = '🛰️ จำลองพิกัด';
+    btnSim.onclick = () => completeMission('จำลองการปักหมุดพิกัดแผนที่ Geolocation สำเร็จ!');
+
+    actionArea.appendChild(btnGps);
+    actionArea.appendChild(btnSim);
+  }
+
+  // --- 7. เซ็นเซอร์วัดแสง ---
+  function setupLightMission() {
+    let lux = 50;
+    const btnLight = document.createElement('button');
+    btnLight.className = 'btn-primary';
+    btnLight.textContent = '💡 อ่านค่าเซ็นเซอร์แสง / จำลองปรับแสง';
+    btnLight.onclick = () => {
+      if ('AmbientLightSensor' in window) {
+        try {
+          const sensor = new AmbientLightSensor();
+          sensor.onreading = () => {
+            readout.textContent = `ความสว่างห้อง: ${sensor.illuminance} Lux`;
+            completeMission(`อ่านค่าความสว่างจริงได้ ${sensor.illuminance} Lux!`);
+          };
+          sensor.start();
+          return;
+        } catch (e) {}
+      }
+      lux += 35;
+      readout.textContent = `จำลองความสว่างห้อง: ${lux} Lux`;
+      ctx.fillStyle = `rgba(253, 224, 71, ${Math.min(0.9, lux / 150)})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (lux >= 120) {
+        completeMission('ทดสอบระบบปรับความสว่างตามสภาพแวดล้อมสำเร็จ!');
+      }
+    };
+    actionArea.appendChild(btnLight);
+  }
+
+  selectMission(0);
+</script>
+</body>
+</html>

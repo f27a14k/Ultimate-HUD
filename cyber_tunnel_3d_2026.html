@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cyber Tunnel 3D - 2026</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #03050c;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .hud {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 10;
+    font-size: 16px;
+    font-weight: bold;
+    text-shadow: 0 0 10px #00f5d4;
+  }
+  .hud span { color: #00f5d4; }
+  .controls {
+    position: absolute;
+    bottom: 24px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 20;
+  }
+  .btn {
+    flex: 1;
+    height: 68px;
+    border-radius: 18px;
+    border: 2px solid rgba(0, 245, 212, 0.5);
+    background: rgba(10, 25, 47, 0.65);
+    color: #00f5d4;
+    font-size: 22px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    touch-action: manipulation;
+  }
+  .btn:active {
+    background: rgba(0, 245, 212, 0.35);
+    transform: scale(0.95);
+  }
+  .btn-jump {
+    border-color: rgba(255, 209, 102, 0.6);
+    color: #ffd166;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 5, 12, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+    text-align: center;
+    padding: 24px;
+  }
+  .overlay h1 {
+    font-size: 28px;
+    color: #00f5d4;
+    text-shadow: 0 0 20px #00f5d4;
+    margin-bottom: 10px;
+  }
+  .overlay p {
+    color: #cbd5e1;
+    font-size: 15px;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+  .start-btn {
+    padding: 14px 36px;
+    font-size: 18px;
+    font-weight: bold;
+    border: none;
+    border-radius: 30px;
+    background: linear-gradient(135deg, #00f5d4, #00bbf9);
+    color: #03050c;
+    box-shadow: 0 0 25px rgba(0, 245, 212, 0.6);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div>SCORE: <span id="scoreEl">0</span></div>
+  <div>SPEED: <span id="speedEl">1.0x</span></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="controls">
+  <div class="btn" id="btnLeft">◀</div>
+  <div class="btn btn-jump" id="btnJump">▲ กระโดด</div>
+  <div class="btn" id="btnRight">▶</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <h1>🚀 CYBER TUNNEL 3D</h1>
+  <p>บังคับยานอวกาศ 3 เลน หลบสิ่งกีดขวางสีแดง<br>และเก็บวงแหวนพลังงานสีทองในมิติ 3D</p>
+  <button class="start-btn" id="startBtn">เริ่มพุ่งทะยาน</button>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('scoreEl');
+  const speedEl = document.getElementById('speedEl');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+
+  let width, height, cx, cy;
+  function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    cx = width / 2;
+    cy = height * 0.42;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let audioCtx = null;
+  function playTone(freqStart, freqEnd, duration, type = 'sine', vol = 0.12) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freqStart, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + duration);
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+  }
+
+  const FOV = 320;
+  const MAX_Z = 2400;
+  const LANES = [-160, 0, 160];
+
+  let isPlaying = false;
+  let score = 0;
+  let speed = 18;
+  let frameCount = 0;
+
+  let player = {
+    lane: 1,
+    x: 0,
+    y: 0,
+    vy: 0,
+    isJumping: false,
+    tilt: 0
+  };
+
+  let objects = [];
+  let gridZ = 0;
+
+  function project3D(x, y, z) {
+    const safeZ = Math.max(z, 10);
+    const scale = FOV / safeZ;
+    const cosT = Math.cos(player.tilt * 0.4);
+    const sinT = Math.sin(player.tilt * 0.4);
+    const rx = x * cosT - (y - 120) * sinT;
+    const ry = x * sinT + (y - 120) * cosT;
+
+    return {
+      x: cx + rx * scale,
+      y: cy - ry * scale,
+      scale: scale
+    };
+  }
+
+  function resetGame() {
+    score = 0;
+    speed = 18;
+    frameCount = 0;
+    player = { lane: 1, x: 0, y: 0, vy: 0, isJumping: false, tilt: 0 };
+    objects = [];
+    gridZ = 0;
+    isPlaying = true;
+    overlay.style.display = 'none';
+    playTone(220, 660, 0.25, 'triangle');
+  }
+
+  function moveLeft() {
+    if (!isPlaying) return;
+    if (player.lane > 0) {
+      player.lane--;
+      playTone(300, 420, 0.08, 'sine', 0.08);
+    }
+  }
+  function moveRight() {
+    if (!isPlaying) return;
+    if (player.lane < 2) {
+      player.lane++;
+      playTone(300, 420, 0.08, 'sine', 0.08);
+    }
+  }
+  function jump() {
+    if (!isPlaying) return;
+    if (!player.isJumping) {
+      player.vy = 19;
+      player.isJumping = true;
+      playTone(240, 580, 0.18, 'square', 0.09);
+    }
+  }
+
+  document.getElementById('btnLeft').addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft(); });
+  document.getElementById('btnRight').addEventListener('touchstart', (e) => { e.preventDefault(); moveRight(); });
+  document.getElementById('btnJump').addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+  document.getElementById('btnLeft').addEventListener('mousedown', moveLeft);
+  document.getElementById('btnRight').addEventListener('mousedown', moveRight);
+  document.getElementById('btnJump').addEventListener('mousedown', jump);
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft();
+    if (e.key === 'ArrowRight' || e.key === 'd') moveRight();
+    if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') jump();
+  });
+
+  startBtn.addEventListener('click', resetGame);
+
+  function spawnWave() {
+    const blockedLane = Math.floor(Math.random() * 3);
+    const secondBlock = Math.random() < 0.45 ? (blockedLane + 1) % 3 : -1;
+
+    for (let l = 0; l < 3; l++) {
+      if (l === blockedLane || l === secondBlock) {
+        objects.push({
+          type: 'obstacle',
+          lane: l,
+          x: LANES[l],
+          y: 0,
+          z: MAX_Z,
+          height: 65
+        });
+      } else if (Math.random() < 0.65) {
+        objects.push({
+          type: 'ring',
+          lane: l,
+          x: LANES[l],
+          y: 35,
+          z: MAX_Z
+        });
+      }
+    }
+  }
+
+  function update() {
+    if (!isPlaying) return;
+    frameCount++;
+    speed = Math.min(42, 18 + score * 0.015);
+    score += 1;
+    scoreEl.textContent = Math.floor(score / 5);
+    speedEl.textContent = (speed / 18).toFixed(1) + 'x';
+
+    const targetX = LANES[player.lane];
+    const dx = targetX - player.x;
+    player.x += dx * 0.22;
+    player.tilt = -dx * 0.0045;
+
+    if (player.isJumping) {
+      player.y += player.vy;
+      player.vy -= 1.25;
+      if (player.y <= 0) {
+        player.y = 0;
+        player.vy = 0;
+        player.isJumping = false;
+      }
+    }
+
+    gridZ = (gridZ + speed) % 150;
+
+    if (frameCount % Math.max(24, Math.floor(55 - speed * 0.6)) === 0) {
+      spawnWave();
+    }
+
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const obj = objects[i];
+      obj.z -= speed;
+
+      if (obj.z < 230 && obj.z > 150) {
+        const sameLane = Math.abs(player.x - obj.x) < 55;
+        if (sameLane) {
+          if (obj.type === 'ring') {
+            score += 150;
+            playTone(880, 1320, 0.14, 'sine', 0.14);
+            objects.splice(i, 1);
+            continue;
+          } else if (obj.type === 'obstacle' && player.y < 52) {
+            isPlaying = false;
+            playTone(180, 55, 0.45, 'sawtooth', 0.2);
+            overlay.innerHTML = `
+              <h1 style="color:#ff4d6d;text-shadow:0 0 20px #ff4d6d;">💥 ยานชนสิ่งกีดขวาง!</h1>
+              <p>คะแนนของคุณ: <strong style="color:#00f5d4;font-size:22px;">${Math.floor(score / 5)}</strong></p>
+              <button class="start-btn" onclick="resetGame()">เล่นอีกครั้ง</button>
+            `;
+            overlay.style.display = 'flex';
+            return;
+          }
+        }
+      }
+
+      if (obj.z < 40) {
+        objects.splice(i, 1);
+      }
+    }
+  }
+
+  function draw() {
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+    bgGrad.addColorStop(0, '#02040a');
+    bgGrad.addColorStop(0.42, '#0b132b');
+    bgGrad.addColorStop(1, '#040814');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = 'rgba(0, 245, 212, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(width, cy);
+    ctx.stroke();
+
+    const laneEdges = [-240, -80, 80, 240];
+    ctx.strokeStyle = 'rgba(0, 245, 212, 0.45)';
+    ctx.lineWidth = 2;
+    laneEdges.forEach(lx => {
+      const pNear = project3D(lx, 0, 120);
+      const pFar = project3D(lx, 0, MAX_Z);
+      ctx.beginPath();
+      ctx.moveTo(pNear.x, pNear.y);
+      ctx.lineTo(pFar.x, pFar.y);
+      ctx.stroke();
+    });
+
+    for (let z = 150 - gridZ; z < MAX_Z; z += 150) {
+      if (z < 80) continue;
+      const pLeft = project3D(-240, 0, z);
+      const pRight = project3D(240, 0, z);
+      const alpha = Math.max(0.05, 1 - z / MAX_Z);
+      ctx.strokeStyle = `rgba(0, 187, 249, ${alpha * 0.5})`;
+      ctx.lineWidth = Math.max(1, 3 * (1 - z / MAX_Z));
+      ctx.beginPath();
+      ctx.moveTo(pLeft.x, pLeft.y);
+      ctx.lineTo(pRight.x, pRight.y);
+      ctx.stroke();
+    }
+
+    for (let z = 300 - (gridZ * 2) % 300; z < MAX_Z; z += 300) {
+      if (z < 120) continue;
+      const pBL = project3D(-260, 0, z);
+      const pTL = project3D(-260, 260, z);
+      const pTR = project3D(260, 260, z);
+      const pBR = project3D(260, 0, z);
+      const alpha = Math.max(0.03, (1 - z / MAX_Z) * 0.35);
+      ctx.strokeStyle = `rgba(155, 93, 229, ${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pBL.x, pBL.y);
+      ctx.lineTo(pTL.x, pTL.y);
+      ctx.lineTo(pTR.x, pTR.y);
+      ctx.lineTo(pBR.x, pBR.y);
+      ctx.stroke();
+    }
+
+    objects.sort((a, b) => b.z - a.z);
+
+    objects.forEach(obj => {
+      if (obj.type === 'obstacle') {
+        const w = 58;
+        const h = obj.height;
+        const depth = 60;
+        const fBL = project3D(obj.x - w, 0, obj.z);
+        const fBR = project3D(obj.x + w, 0, obj.z);
+        const fTL = project3D(obj.x - w, h, obj.z);
+        const fTR = project3D(obj.x + w, h, obj.z);
+
+        const bTL = project3D(obj.x - w, h, obj.z + depth);
+        const bTR = project3D(obj.x + w, h, obj.z + depth);
+
+        ctx.fillStyle = '#ff758f';
+        ctx.beginPath();
+        ctx.moveTo(fTL.x, fTL.y);
+        ctx.lineTo(bTL.x, bTL.y);
+        ctx.lineTo(bTR.x, bTR.y);
+        ctx.lineTo(fTR.x, fTR.y);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ff2a55';
+        ctx.strokeStyle = '#ffb3c1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(fBL.x, fBL.y);
+        ctx.lineTo(fTL.x, fTL.y);
+        ctx.lineTo(fTR.x, fTR.y);
+        ctx.lineTo(fBR.x, fBR.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (obj.type === 'ring') {
+        const center = project3D(obj.x, obj.y + Math.sin(frameCount * 0.1) * 6, obj.z);
+        const radius = 32 * center.scale;
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = Math.max(2, 6 * center.scale);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+
+    const shadowPos = project3D(player.x, 0, 200);
+    const shadowW = Math.max(15, (46 - player.y * 0.25) * shadowPos.scale);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(shadowPos.x, shadowPos.y, shadowW, shadowW * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shipPos = project3D(player.x, player.y + 18, 200);
+    const s = shipPos.scale;
+
+    ctx.save();
+    ctx.translate(shipPos.x, shipPos.y);
+    ctx.rotate(-player.tilt * 1.8);
+
+    ctx.fillStyle = '#00bbf9';
+    ctx.beginPath();
+    ctx.moveTo(0, -28 * s);
+    ctx.lineTo(-48 * s, 18 * s);
+    ctx.lineTo(0, 6 * s);
+    ctx.lineTo(48 * s, 18 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#00f5d4';
+    ctx.beginPath();
+    ctx.moveTo(0, -18 * s);
+    ctx.lineTo(-14 * s, 8 * s);
+    ctx.lineTo(14 * s, 8 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = frameCount % 4 < 2 ? '#ffd166' : '#ff5400';
+    ctx.beginPath();
+    ctx.arc(-16 * s, 14 * s, 7 * s, 0, Math.PI * 2);
+    ctx.arc(16 * s, 14 * s, 7 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
+</body>
+</html>

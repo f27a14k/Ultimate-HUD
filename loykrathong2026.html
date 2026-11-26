@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ลอยกระทงออนไลน์ 2026</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #050914 0%, #101f3d 48%, #071021 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #ffffff;
+    text-align: center;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+  .stars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 55%;
+    pointer-events: none;
+  }
+  .star {
+    position: absolute;
+    background: #ffffff;
+    border-radius: 50%;
+    animation: twinkle 2.5s infinite alternate;
+  }
+  .moon {
+    position: absolute;
+    top: 32px;
+    right: 8%;
+    width: 76px;
+    height: 76px;
+    background: radial-gradient(circle at 35% 35%, #fffdf0, #ffe66d);
+    border-radius: 50%;
+    box-shadow: 0 0 40px #ffd166, 0 0 80px rgba(255, 209, 102, 0.4);
+    pointer-events: none;
+  }
+  .controls {
+    position: relative;
+    z-index: 20;
+    padding: 24px 16px 10px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: #ffe875;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  }
+  p.sub {
+    font-size: 13px;
+    margin: 0 0 14px;
+    color: #cbd5e1;
+  }
+  .input-group {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 25px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(15, 23, 42, 0.85);
+    color: #fff;
+    font-size: 15px;
+    outline: none;
+  }
+  input::placeholder { color: #94a3b8; }
+  button {
+    padding: 12px 20px;
+    border-radius: 25px;
+    border: none;
+    background: linear-gradient(135deg, #ffb703, #fb8500);
+    color: #070b19;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 15px rgba(251, 133, 0, 0.4);
+    active: transform: scale(0.96);
+  }
+  .river {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 48%;
+    background: linear-gradient(to bottom, #0c2245 0%, #050e1f 100%);
+    border-top: 2px solid rgba(255, 232, 117, 0.25);
+    overflow: hidden;
+  }
+  .moon-reflection {
+    position: absolute;
+    top: 8px;
+    right: 10%;
+    width: 60px;
+    height: 140px;
+    background: radial-gradient(ellipse at top, rgba(255, 232, 117, 0.28), transparent 70%);
+    pointer-events: none;
+  }
+  .krathong {
+    position: absolute;
+    left: -140px;
+    animation: floatAway 20s linear forwards;
+    text-align: center;
+    z-index: 10;
+  }
+  .krathong-inner {
+    animation: bobbing 2.4s ease-in-out infinite;
+  }
+  .wish-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff3b0;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+    display: inline-block;
+    max-width: 200px;
+    word-wrap: break-word;
+  }
+  .flame {
+    width: 10px;
+    height: 18px;
+    background: radial-gradient(circle at bottom, #fff, #ff9e00);
+    border-radius: 50% 50% 25% 25%;
+    margin: 0 auto;
+    box-shadow: 0 0 16px #ffbe0b, 0 0 28px #fb8500;
+    animation: flicker 0.25s infinite alternate;
+  }
+  .candle {
+    width: 6px;
+    height: 20px;
+    background: #fefae0;
+    margin: 0 auto;
+    border-radius: 2px;
+  }
+  .flowers {
+    width: 78px;
+    height: 20px;
+    background: radial-gradient(circle, #ff70a6, #ff9770, #ffd670);
+    border-radius: 50% 50% 0 0;
+    margin: 0 auto;
+  }
+  .base {
+    width: 96px;
+    height: 24px;
+    background: linear-gradient(to bottom, #40916c, #1b4332);
+    border-radius: 0 0 24px 24px;
+    border-top: 3px solid #74c69d;
+    margin: 0 auto;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+  }
+  .ripple {
+    width: 110px;
+    height: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 50%;
+    margin: -4px auto 0;
+  }
+  .lantern {
+    position: absolute;
+    bottom: 48%;
+    width: 18px;
+    height: 24px;
+    background: radial-gradient(circle, #fff3b0, #f77f00);
+    border-radius: 6px 6px 2px 2px;
+    box-shadow: 0 0 15px #fcbf49;
+    animation: flyUp 16s linear forwards;
+    pointer-events: none;
+  }
+  @keyframes floatAway {
+    0% { left: 5%; transform: scale(1); opacity: 1; }
+    85% { opacity: 0.9; }
+    100% { left: 108%; transform: scale(0.55); opacity: 0; }
+  }
+  @keyframes bobbing {
+    0%, 100% { transform: translateY(0px) rotate(-1.5deg); }
+    50% { transform: translateY(-6px) rotate(1.5deg); }
+  }
+  @keyframes flicker {
+    from { transform: scale(1); opacity: 0.9; }
+    to { transform: scale(1.18); opacity: 1; }
+  }
+  @keyframes twinkle {
+    from { opacity: 0.2; }
+    to { opacity: 0.9; }
+  }
+  @keyframes flyUp {
+    0% { transform: translateY(0) scale(1); opacity: 0.95; }
+    100% { transform: translateY(-65vh) translateX(40px) scale(0.35); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <div class="stars" id="stars"></div>
+  <div class="moon"></div>
+
+  <div class="controls">
+    <h1>🌕 ลอยกระทงออนไลน์ 2026</h1>
+    <p class="sub">พิมพ์คำอธิษฐาน หรือเรื่องที่อยากปล่อยวางไปกับสายน้ำ</p>
+    <div class="input-group">
+      <input type="text" id="wishInput" placeholder="ขอให้มีแต่ความสบายใจ..." maxlength="50">
+      <button onclick="releaseKrathong()">ปล่อยกระทง</button>
+    </div>
+  </div>
+
+  <div class="river" id="river">
+    <div class="moon-reflection"></div>
+  </div>
+
+  <script>
+    const starsContainer = document.getElementById('stars');
+    for (let i = 0; i < 45; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const size = Math.random() * 2.5 + 1;
+      s.style.width = size + 'px';
+      s.style.height = size + 'px';
+      s.style.top = Math.random() * 100 + '%';
+      s.style.left = Math.random() * 100 + '%';
+      s.style.animationDelay = (Math.random() * 2) + 's';
+      starsContainer.appendChild(s);
+    }
+
+    function releaseKrathong(customText) {
+      const river = document.getElementById('river');
+      const input = document.getElementById('wishInput');
+      const wish = customText || input.value.trim() || "ขอให้มีแต่ความสบายใจ";
+      
+      const k = document.createElement('div');
+      k.className = 'krathong';
+      k.style.bottom = (Math.random() * 52 + 12) + '%';
+      k.innerHTML = `
+        <div class="krathong-inner">
+          <div class="wish-text">${wish}</div>
+          <div class="flame"></div>
+          <div class="candle"></div>
+          <div class="flowers"></div>
+          <div class="base"></div>
+          <div class="ripple"></div>
+        </div>
+      `;
+      river.appendChild(k);
+      if (!customText) input.value = '';
+      setTimeout(() => k.remove(), 20000);
+
+      const lantern = document.createElement('div');
+      lantern.className = 'lantern';
+      lantern.style.left = (Math.random() * 70 + 15) + '%';
+      document.body.appendChild(lantern);
+      setTimeout(() => lantern.remove(), 16000);
+    }
+
+    window.onload = () => {
+      setTimeout(() => releaseKrathong("สุขสันต์วันลอยกระทง 2026"), 600);
+    };
+  </script>
+</body>
+</html>

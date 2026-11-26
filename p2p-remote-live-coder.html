@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>P2P Remote Live Coder & Hardware Hub</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b20;
+      --primary: #00e676;
+      --secondary: #2979ff;
+      --warning: #ffab00;
+      --danger: #ff1744;
+      --text: #e0e0e0;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 14px; background-color: var(--bg); color: var(--text); }
+    .card {
+      background: var(--card); border-radius: 12px;
+      padding: 16px; margin-bottom: 14px;
+      border: 1px solid #2a2e37;
+    }
+    h2, h3 { margin: 0 0 10px 0; font-size: 18px; }
+    label { font-size: 13px; color: #aaa; display: block; margin-top: 8px; }
+    input, select, button, textarea {
+      width: 100%; padding: 11px; margin-top: 6px;
+      border-radius: 8px; border: 1px solid #333; font-size: 15px;
+    }
+    input, select { background: #101216; color: white; }
+    textarea {
+      background: #0a0c0e; color: #00e676;
+      font-family: 'Courier New', monospace; font-size: 13px;
+      line-height: 1.4; resize: vertical;
+    }
+    button {
+      background: var(--primary); color: #000;
+      font-weight: bold; border: none; cursor: pointer;
+    }
+    button:active { opacity: 0.85; transform: scale(0.99); }
+    button.blue { background: var(--secondary); color: white; }
+    button.orange { background: var(--warning); color: #000; }
+    button.red { background: var(--danger); color: white; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: bold; background: #2c303a; color: #999;
+    }
+    .badge.ok { background: rgba(0, 230, 118, 0.15); color: var(--primary); }
+    #logBox {
+      background: #08090b; color: #8be9fd; font-family: monospace;
+      font-size: 12px; height: 150px; overflow-y: auto;
+      padding: 10px; border-radius: 8px; border: 1px solid #222;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- หน้าตั้งค่าเริ่มต้น -->
+  <div class="card" id="setupPanel">
+    <h2>🚀 P2P Remote Live Coder</h2>
+    <p style="font-size: 13px; color: #999; margin: 0 0 10px 0;">
+      เขียนโค้ดสั่งงานบอร์ดข้ามอินเทอร์เน็ตแบบ Real-time
+    </p>
+    <label>ชื่อห้องเครือข่าย (ต้องตรงกันทั้ง 2 เครื่อง):</label>
+    <input type="text" id="roomInput" value="remote-coder-01">
+
+    <label>เลือกหน้าที่ของมือถือเครื่องนี้:</label>
+    <select id="roleSelect">
+      <option value="coder">💻 Remote Coder (เครื่องเขียนโค้ด & สั่งงาน)</option>
+      <option value="bridge">🔌 Hardware Bridge (เครื่องที่เสียบบอร์ด OTG / BLE)</option>
+    </select>
+
+    <button id="btnConnect" style="margin-top: 14px;">เชื่อมต่อเข้าสู่ระบบ P2P</button>
+  </div>
+
+  <!-- แถบสถานะ -->
+  <div class="card hidden" id="statusPanel">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong id="roleTitle"></strong>
+      <span id="peerBadge" class="badge">รออีกเครื่อง... (0)</span>
+    </div>
+    <div style="font-size: 12px; color: #888; margin-top: 6px;">
+      สถานะฮาร์ดแวร์ฝั่ง Bridge: <span id="hwStatusText" style="color:#ffab00;">ยังไม่เชื่อมต่อ</span>
+    </div>
+  </div>
+
+  <!-- ฝั่งที่ 1: Remote Coder (เครื่องเขียนโค้ดระยะไกล) -->
+  <div class="card hidden" id="coderPanel">
+    <h3>💻 หน้าต่างเขียนโค้ดควบคุมระยะไกล (JavaScript)</h3>
+    <p style="font-size: 12px; color: #aaa; margin: 0 0 6px 0;">
+      คำสั่งที่ใช้ได้: <code>await send("ข้อความ\n")</code> และ <code>await sleep(มิลลิวินาที)</code>
+    </p>
+    <textarea id="codeEditor" rows="10">// ตัวอย่าง: สั่งไฟกะพริบ 5 รอบข้ามอินเทอร์เน็ต
+for (let i = 1; i <= 5; i++) {
+  log("รอบที่ " + i + ": เปิดไฟ");
+  await send("CMD:LED_ON\n");
+  await sleep(500);
+  
+  log("รอบที่ " + i + ": ปิดไฟ");
+  await send("CMD:LED_OFF\n");
+  await sleep(500);
+}
+log("ทำงานเสร็จสิ้น!");</textarea>
+    <div class="grid-2" style="margin-top: 8px;">
+      <button onclick="deployAndRun()">▶️ ส่งโค้ดและรันทันที</button>
+      <button class="red" onclick="stopRemoteScript()">⏹️ สั่งหยุดการทำงาน</button>
+    </div>
+
+    <div style="margin-top: 12px; border-top: 1px solid #2a2e37; padding-top: 10px;">
+      <label>ส่งคำสั่งด่วน (Direct Command):</label>
+      <div class="grid-2">
+        <input type="text" id="quickCmdInput" placeholder="เช่น CMD:LED_ON">
+        <button class="blue" onclick="sendQuickCmd()">ส่งคำสั่ง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ฝั่งที่ 2: Hardware Bridge (เครื่องที่เสียบบอร์ดอยู่) -->
+  <div class="card hidden" id="bridgePanel">
+    <h3>🔌 เชื่อมต่อบอร์ด Arduino / ESP32</h3>
+    <label>ความเร็ว Baud Rate (สำหรับสาย USB OTG):</label>
+    <select id="baudSelect">
+      <option value="115200">115200 (ESP32 / ESP8266)</option>
+      <option value="9600">9600 (Arduino Uno / Nano)</option>
+    </select>
+    <div class="grid-2" style="margin-top: 8px;">
+      <button class="blue" onclick="connectUSB()">🔌 ต่อสาย USB OTG</button>
+      <button class="orange" onclick="connectBLE()">📶 ต่อ Bluetooth BLE</button>
+    </div>
+    <p style="font-size: 12px; color: #888; margin: 10px 0 0 0;">
+      * เมื่อเชื่อมต่อบอร์ดแล้ว เครื่องนี้จะรอรับโค้ดจากฝั่ง Remote Coder มารันอัตโนมัติ
+    </p>
+  </div>
+
+  <!-- กล่องแสดงผล Log และค่าตอบกลับจากบอร์ด -->
+  <div class="card hidden" id="logPanel">
+    <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
+      <strong>📡 System & Serial Monitor</strong>
+      <span style="font-size:12px; color:#888; cursor:pointer;" onclick="document.getElementById('logBox').innerHTML=''">ล้างจอ</span>
+    </div>
+    <div id="logBox"></div>
+  </div>
+
+  <script type="module">
+    import { joinRoom } from 'https://esm.run/trystero/torrent';
+    import { serial as webSerialPolyfill } from 'https://esm.run/web-serial-polyfill';
+
+    let room, sendPacket;
+    let myRole = '';
+    let isScriptRunning = false;
+    let serialWriter = null;
+    let bleCharacteristic = null;
+    const peers = new Set();
+
+    // ระบบกันหน้าจอดับ
+    async function keepScreenAwake() {
+      try {
+        if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+      } catch (e) {}
+    }
+
+    window.log = (msg, color = '#8be9fd') => {
+      const box = document.getElementById('logBox');
+      const time = new Date().toLocaleTimeString();
+      box.innerHTML += `<div style="color:${color}">[${time}] ${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    };
+
+    document.getElementById('btnConnect').addEventListener('click', () => {
+      const roomName = document.getElementById('roomInput').value.trim();
+      if (!roomName) return alert('กรุณาใส่ชื่อห้อง');
+      myRole = document.getElementById('roleSelect').value;
+
+      document.getElementById('setupPanel').classList.add('hidden');
+      document.getElementById('statusPanel').classList.remove('hidden');
+      document.getElementById('logPanel').classList.remove('hidden');
+
+      if (myRole === 'coder') {
+        document.getElementById('roleTitle').innerText = '💻 โหมด: Remote Coder';
+        document.getElementById('coderPanel').classList.remove('hidden');
+      } else {
+        document.getElementById('roleTitle').innerText = '🔌 โหมด: Hardware Bridge';
+        document.getElementById('bridgePanel').classList.remove('hidden');
+      }
+
+      keepScreenAwake();
+      setupP2P(roomName);
+    });
+
+    function setupP2P(roomName) {
+      room = joinRoom({ appId: 'p2p-remote-live-coder-v1' }, roomName);
+      const [sendData, getData] = room.makeAction('coderPacket');
+      sendPacket = sendData;
+
+      log(`เข้าร่วมห้อง "${roomName}" สำเร็จ กำลังค้นหาอีกเครื่อง...`, '#00e676');
+
+      room.onPeerJoin(id => {
+        peers.add(id);
+        updatePeerStatus();
+        log(`🟢 เชื่อมต่อกับอุปกรณ์ปลายทางแล้ว (${id.slice(0,5)})`, '#00e676');
+      });
+
+      room.onPeerLeave(id => {
+        peers.delete(id);
+        updatePeerStatus();
+        log(`🔴 อุปกรณ์ปลายทางหลุดการเชื่อมต่อ`, '#ff1744');
+      });
+
+      getData(async (packet, peerId) => {
+        // ฝั่ง Bridge รับคำสั่งไปรัน
+        if (myRole === 'bridge') {
+          if (packet.type === 'RUN_SCRIPT') {
+            log(`📥 ได้รับสคริปต์ใหม่จากระยะไกล กำลังเริ่มรัน...`, '#ffab00');
+            executeDynamicCode(packet.code);
+          } else if (packet.type === 'STOP_SCRIPT') {
+            isScriptRunning = false;
+            log(`⏹️ ได้รับคำสั่งหยุดการทำงานจากระยะไกล`, '#ff1744');
+          } else if (packet.type === 'RAW_CMD') {
+            await writeToHardware(packet.cmd);
+          }
+        }
+        // ฝั่ง Coder รับรายงานสถานะและข้อมูล Serial กลับจาก Bridge
+        if (myRole === 'coder') {
+          if (packet.type === 'HW_STATUS') {
+            const st = document.getElementById('hwStatusText');
+            st.innerText = packet.status;
+            st.style.color = '#00e676';
+          } else if (packet.type === 'BRIDGE_LOG') {
+            log(`[Bridge] ${packet.msg}`, '#50fa7b');
+          }
+        }
+      });
+    }
+
+    function updatePeerStatus() {
+      const b = document.getElementById('peerBadge');
+      b.innerText = `เชื่อมต่อแล้ว (${peers.size})`;
+      b.className = peers.size > 0 ? 'badge ok' : 'badge';
+    }
+
+    // --- ฟังก์ชันฝั่ง Remote Coder ---
+    window.deployAndRun = () => {
+      const code = document.getElementById('codeEditor').value;
+      if (peers.size === 0) return alert('ยังไม่พบเครื่อง Hardware Bridge ในห้องครับ');
+      sendPacket({ type: 'RUN_SCRIPT', code: code });
+      log(`📤 ส่งโค้ดไปยังเครื่อง Bridge เรียบร้อย`, '#00e676');
+    };
+
+    window.stopRemoteScript = () => {
+      sendPacket({ type: 'STOP_SCRIPT' });
+      log(`📤 ส่งคำสั่งหยุดการทำงานแล้ว`, '#ff1744');
+    };
+
+    window.sendQuickCmd = () => {
+      const cmd = document.getElementById('quickCmdInput').value;
+      if (!cmd) return;
+      sendPacket({ type: 'RAW_CMD', cmd: cmd + '\n' });
+      log(`📤 ส่งคำสั่งด่วน: ${cmd}`);
+      document.getElementById('quickCmdInput').value = '';
+    };
+
+    // --- ฟังก์ชันฝั่ง Hardware Bridge (รันโค้ดแบบ Dynamic Sandbox) ---
+    async function executeDynamicCode(userCode) {
+      isScriptRunning = false;
+      await new Promise(r => setTimeout(r, 100)); // รอให้ลูปเก่าหยุดสนิท
+      isScriptRunning = true;
+
+      const sendFn = async (text) => {
+        if (!isScriptRunning) throw new Error('SCRIPT_STOPPED');
+        await writeToHardware(text);
+      };
+
+      const sleepFn = async (ms) => {
+        if (!isScriptRunning) throw new Error('SCRIPT_STOPPED');
+        await new Promise(r => setTimeout(r, ms));
+        if (!isScriptRunning) throw new Error('SCRIPT_STOPPED');
+      };
+
+      const remoteLogFn = (msg) => {
+        log(msg, '#f1fa8c');
+        if (sendPacket) sendPacket({ type: 'BRIDGE_LOG', msg: String(msg) });
+      };
+
+      try {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const runner = new AsyncFunction('send', 'sleep', 'log', userCode);
+        await runner(sendFn, sleepFn, remoteLogFn);
+        remoteLogFn('✅ รันสคริปต์จบสมบูรณ์');
+      } catch (err) {
+        if (err.message !== 'SCRIPT_STOPPED') {
+          remoteLogFn('❌ โค้ดมีข้อผิดพลาด: ' + err.message);
+        }
+      } finally {
+        isScriptRunning = false;
+      }
+    }
+
+    // --- การเชื่อมต่อฮาร์ดแวร์ (USB OTG & BLE) ---
+    window.connectUSB = async () => {
+      try {
+        const baud = parseInt(document.getElementById('baudSelect').value);
+        const serialApi = ('serial' in navigator) ? navigator.serial : webSerialPolyfill;
+        const port = await serialApi.requestPort();
+        await port.open({ baudRate: baud });
+        serialWriter = port.writable.getWriter();
+
+        const statusMsg = `เชื่อมต่อ USB OTG แล้ว (${baud})`;
+        document.getElementById('hwStatusText').innerText = statusMsg;
+        document.getElementById('hwStatusText').style.color = '#00e676';
+        if (sendPacket) sendPacket({ type: 'HW_STATUS', status: statusMsg });
+        log(`🔌 ${statusMsg}`, '#00e676');
+
+        // อ่านค่าที่บอร์ดส่งกลับมา
+        readSerialLoop(port);
+      } catch (err) {
+        log(`❌ เชื่อมต่อ USB ไม่สำเร็จ: ${err.message}`, '#ff1744');
+      }
+    };
+
+    async function readSerialLoop(port) {
+      const decoder = new TextDecoder();
+      const reader = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            const text = decoder.decode(value).trim();
+            if (text) {
+              log(`[Board] ${text}`, '#bd93f9');
+              if (sendPacket) sendPacket({ type: 'BRIDGE_LOG', msg: `[Board] ${text}` });
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    window.connectBLE = async () => {
+      try {
+        const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const RX_CHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [UART_SERVICE]
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(UART_SERVICE);
+        bleCharacteristic = await service.getCharacteristic(RX_CHAR);
+
+        const statusMsg = `เชื่อมต่อ BLE: ${device.name}`;
+        document.getElementById('hwStatusText').innerText = statusMsg;
+        document.getElementById('hwStatusText').style.color = '#00e676';
+        if (sendPacket) sendPacket({ type: 'HW_STATUS', status: statusMsg });
+        log(`📶 ${statusMsg}`, '#00e676');
+      } catch (err) {
+        log(`❌ เชื่อมต่อ BLE ไม่สำเร็จ: ${err.message}`, '#ff1744');
+      }
+    };
+
+    async function writeToHardware(text) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      if (serialWriter) {
+        await serialWriter.write(data);
+        log(`➡️ [USB] ${text.trim()}`);
+      } else if (bleCharacteristic) {
+        await bleCharacteristic.writeValue(data);
+        log(`➡️ [BLE] ${text.trim()}`);
+      } else {
+        log(`⚠️ (จำลองส่ง - ยังไม่ได้ต่อบอร์ด): ${text.trim()}`, '#ffab00');
+      }
+    }
+  </script>
+</body>
+</html>

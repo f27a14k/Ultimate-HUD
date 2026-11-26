@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>P2P Ecosystem Core Hub</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --primary: #00e676;
+      --secondary: #2979ff;
+      --danger: #ff1744;
+      --text: #ffffff;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      margin: 0; padding: 16px;
+      background-color: var(--bg); color: var(--text);
+      transition: background-color 0.2s;
+    }
+    .card {
+      background: var(--card); border-radius: 12px;
+      padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    h2, h3 { margin-top: 0; }
+    input, select, button {
+      width: 100%; padding: 12px; margin-top: 8px;
+      border-radius: 8px; border: none; font-size: 16px;
+    }
+    input, select { background: #2c2c2c; color: white; border: 1px solid #444; }
+    button {
+      background: var(--primary); color: #000;
+      font-weight: bold; cursor: pointer;
+    }
+    button:active { opacity: 0.8; transform: scale(0.98); }
+    button.blue { background: var(--secondary); color: white; }
+    button.red { background: var(--danger); color: white; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .status-badge {
+      display: inline-block; padding: 4px 10px;
+      border-radius: 20px; font-size: 12px; font-weight: bold;
+      background: #333; color: #aaa;
+    }
+    .status-badge.online { background: rgba(0, 230, 118, 0.2); color: var(--primary); }
+    #logBox {
+      background: #000; color: #0f0; font-family: monospace;
+      font-size: 12px; height: 150px; overflow-y: auto;
+      padding: 10px; border-radius: 8px; margin-top: 10px;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="card" id="setupPanel">
+    <h2>🌐 P2P Core Hub</h2>
+    <label>ชื่อห้องเครือข่าย (ต้องตรงกันทุกเครื่อง):</label>
+    <input type="text" id="roomInput" value="my-secret-hub-01" placeholder="ตั้งชื่อห้อง...">
+    
+    <label style="display:block; margin-top:12px;">เลือกบทบาทของเครื่องนี้:</label>
+    <select id="roleSelect">
+      <option value="controller">🎮 Controller (ตัวสั่งงาน)</option>
+      <option value="node">📟 Node / Monitor (ตัวรับคำสั่ง & แสดงผล)</option>
+    </select>
+
+    <button id="btnConnect">🚀 เริ่มเชื่อมต่อเข้าสู่ระบบ</button>
+  </div>
+
+  <div class="card hidden" id="statusPanel">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span id="roleDisplay" style="font-weight:bold;"></span>
+      <span id="peerCount" class="status-badge">รออุปกรณ์อื่น... (0)</span>
+    </div>
+    <div style="font-size: 12px; color: #888; margin-top: 6px;">
+      Node ID: <span id="myIdDisplay">-</span> | WakeLock: <span id="wakeStatus">ปิด</span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="controllerPanel">
+    <h3>🎛️ แผงควบคุม (Controller)</h3>
+    <div class="grid-2">
+      <button class="blue" onclick="sendCommand('screen', 'flash')">💡 สั่งจออีกฝั่งกะพริบ</button>
+      <button class="blue" onclick="sendCommand('hardware', 'vibrate')">📳 สั่งอีกฝั่งสั่น</button>
+    </div>
+    <div style="margin-top: 12px;">
+      <input type="text" id="msgInput" placeholder="พิมพ์ข้อความส่งข้ามเครื่อง...">
+      <button onclick="sendCustomMessage()">📤 ส่งข้อความ</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="nodePanel">
+    <h3>📟 หน้าจอแสดงผล (Node)</h3>
+    <div id="bigDisplay" style="background:#000; padding:30px; text-align:center; border-radius:8px; font-size:24px; font-weight:bold; color:var(--primary);">
+      พร้อมรับคำสั่ง...
+    </div>
+  </div>
+
+  <div class="card hidden" id="logPanel">
+    <div style="display:flex; justify-content:space-between;">
+      <strong>📡 Data Stream (JSON Protocol)</strong>
+      <span style="font-size:12px; color:#888; cursor:pointer;" onclick="document.getElementById('logBox').innerHTML=''">ล้างจอ</span>
+    </div>
+    <div id="logBox"></div>
+  </div>
+
+  <script type="module">
+    import { joinRoom } from 'https://esm.run/trystero/torrent';
+
+    let room;
+    let sendPacket;
+    let myRole = '';
+    const connectedPeers = new Set();
+
+    async function enableWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          await navigator.wakeLock.request('screen');
+          document.getElementById('wakeStatus').innerText = 'ทำงานอยู่ ✅';
+          document.getElementById('wakeStatus').style.color = '#00e676';
+        }
+      } catch (err) {
+        log('⚠️ WakeLock ไม่รองรับหรือถูกบล็อก: ' + err.message);
+      }
+    }
+
+    function log(text) {
+      const box = document.getElementById('logBox');
+      const time = new Date().toLocaleTimeString();
+      box.innerHTML += `<div>[${time}] ${text}</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    document.getElementById('btnConnect').addEventListener('click', () => {
+      const roomName = document.getElementById('roomInput').value.trim();
+      if (!roomName) return alert('กรุณาตั้งชื่อห้องก่อนครับ');
+
+      myRole = document.getElementById('roleSelect').value;
+      
+      document.getElementById('setupPanel').classList.add('hidden');
+      document.getElementById('statusPanel').classList.remove('hidden');
+      document.getElementById('logPanel').classList.remove('hidden');
+
+      if (myRole === 'controller') {
+        document.getElementById('roleDisplay').innerText = '🎮 โหมด: Controller';
+        document.getElementById('controllerPanel').classList.remove('hidden');
+      } else {
+        document.getElementById('roleDisplay').innerText = '📟 โหมด: Node / Monitor';
+        document.getElementById('nodePanel').classList.remove('hidden');
+      }
+
+      enableWakeLock();
+      initP2P(roomName);
+    });
+
+    function initP2P(roomName) {
+      const config = { appId: 'my-diy-p2p-ecosystem-v1' };
+      room = joinRoom(config, roomName);
+      
+      const [sendData, getData] = room.makeAction('hubPacket');
+      sendPacket = sendData;
+
+      log(`กำลังเข้าห้อง: "${roomName}"...`);
+
+      room.onPeerJoin(peerId => {
+        connectedPeers.add(peerId);
+        updatePeerUI();
+        log(`🟢 เชื่อมต่อกับอุปกรณ์ใหม่: ${peerId.slice(0, 6)}`);
+        
+        sendPacket({ type: 'system', action: 'announce', payload: { role: myRole } }, peerId);
+      });
+
+      room.onPeerLeave(peerId => {
+        connectedPeers.delete(peerId);
+        updatePeerUI();
+        log(`🔴 อุปกรณ์หลุดการเชื่อมต่อ: ${peerId.slice(0, 6)}`);
+      });
+
+      getData((packet, peerId) => {
+        log(`📥 จาก ${peerId.slice(0, 6)}: ${JSON.stringify(packet)}`);
+        handleIncomingPacket(packet, peerId);
+      });
+    }
+
+    function updatePeerUI() {
+      const badge = document.getElementById('peerCount');
+      badge.innerText = `เชื่อมต่อแล้ว (${connectedPeers.size})`;
+      if (connectedPeers.size > 0) {
+        badge.classList.add('online');
+      } else {
+        badge.classList.remove('online');
+      }
+    }
+
+    function handleIncomingPacket(packet, peerId) {
+      if (myRole === 'node') {
+        const display = document.getElementById('bigDisplay');
+        
+        if (packet.type === 'screen' && packet.action === 'flash') {
+          document.body.style.backgroundColor = '#00e676';
+          display.innerText = '⚡ ได้รับคำสั่งกะพริบจอ!';
+          setTimeout(() => { document.body.style.backgroundColor = '#121212'; }, 300);
+        }
+        
+        if (packet.type === 'hardware' && packet.action === 'vibrate') {
+          display.innerText = '📳 สั่นเครื่อง!';
+          if ('vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200]);
+          }
+        }
+
+        if (packet.type === 'chat' && packet.action === 'message') {
+          display.innerText = `💬 "${packet.payload.text}"`;
+        }
+      }
+    }
+
+    window.sendCommand = (type, action, payload = {}) => {
+      if (!sendPacket) return;
+      const packet = {
+        type: type,
+        action: action,
+        payload: payload,
+        timestamp: Date.now()
+      };
+      sendPacket(packet);
+      log(`📤 ส่งคำสั่ง: ${JSON.stringify(packet)}`);
+    };
+
+    window.sendCustomMessage = () => {
+      const input = document.getElementById('msgInput');
+      if (!input.value.trim()) return;
+      window.sendCommand('chat', 'message', { text: input.value.trim() });
+      input.value = '';
+    };
+  </script>
+</body>
+</html>

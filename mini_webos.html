@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mini WebOS v1.0</title>
+<style>
+  * { box-sizing: border-box; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #008080; }
+  
+  #desktop {
+    width: 100%; height: calc(100% - 44px);
+    padding: 15px; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 18px;
+    position: relative;
+  }
+
+  .icon {
+    width: 76px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    color: white; font-size: 13px; cursor: pointer; text-shadow: 1px 1px 2px black;
+  }
+  .icon-box {
+    width: 48px; height: 48px; background: rgba(255,255,255,0.2); border: 2px solid #fff;
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; margin-bottom: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  }
+  .icon:active .icon-box { transform: scale(0.92); background: rgba(255,255,255,0.4); }
+
+  .window {
+    position: absolute; top: 40px; left: 5%; width: 90%; max-width: 380px;
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 10;
+  }
+  .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: white;
+    padding: 6px 8px; font-weight: bold; font-size: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .close-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    width: 24px; height: 22px; font-weight: bold; cursor: pointer; line-height: 16px; text-align: center;
+  }
+  .close-btn:active { border-color: #404040 #fff #fff #404040; }
+  .window-body { padding: 10px; flex: 1; }
+
+  #taskbar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 44px;
+    background: #c0c0c0; border-top: 2px solid #fff;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 6px; z-index: 100;
+  }
+  #start-btn {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    padding: 5px 12px; font-weight: bold; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+  }
+  #start-btn:active { border-color: #404040 #fff #fff #404040; }
+  #clock {
+    border: 2px solid; border-color: #808080 #fff #fff #808080;
+    padding: 4px 10px; font-size: 13px; background: #d4d0c8; font-weight: bold;
+  }
+
+  #start-menu {
+    position: fixed; bottom: 44px; left: 6px; width: 200px;
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    display: none; flex-direction: column; z-index: 99; box-shadow: 3px -3px 8px rgba(0,0,0,0.4);
+  }
+  .menu-item { padding: 10px 12px; border-bottom: 1px solid #999; cursor: pointer; font-size: 14px; }
+  .menu-item:active { background: #000080; color: white; }
+
+  textarea { width: 100%; height: 180px; resize: none; border: 2px inset #fff; padding: 6px; font-size: 15px; user-select: text; }
+
+  #calc-display {
+    width: 100%; height: 40px; background: white; border: 2px inset #fff;
+    text-align: right; font-size: 22px; padding: 5px 8px; margin-bottom: 8px; overflow: hidden;
+  }
+  .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .calc-btn {
+    padding: 12px; font-size: 18px; font-weight: bold; background: #d4d0c8;
+    border: 2px solid; border-color: #fff #404040 #404040 #fff; cursor: pointer;
+  }
+  .calc-btn:active { border-color: #404040 #fff #fff #404040; }
+
+  #game-area {
+    width: 100%; height: 200px; background: #111; position: relative; overflow: hidden; border: 2px inset #fff;
+  }
+  #target {
+    width: 42px; height: 42px; background: #ff3b30; border-radius: 50%; position: absolute;
+    display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="desktop" onclick="closeStartMenu()">
+  <div class="icon" onclick="openWindow('win-note')">
+    <div class="icon-box">📝</div>
+    <span>สมุดโน้ต</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-calc')">
+    <div class="icon-box">🧮</div>
+    <span>เครื่องคิดเลข</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-game')">
+    <div class="icon-box">🎯</div>
+    <span>เกมกดเป้า</span>
+  </div>
+  <div class="icon" onclick="openWindow('win-info')">
+    <div class="icon-box">💻</div>
+    <span>ข้อมูลระบบ</span>
+  </div>
+</div>
+
+<div class="window" id="win-note">
+  <div class="title-bar"><span>📝 สมุดโน้ต (Notepad)</span><button class="close-btn" onclick="closeWindow('win-note')">X</button></div>
+  <div class="window-body">
+    <textarea id="note-text" placeholder="พิมพ์ข้อความที่นี่ ระบบจะจำไว้ให้อัตโนมัติ..."></textarea>
+  </div>
+</div>
+
+<div class="window" id="win-calc">
+  <div class="title-bar"><span>🧮 เครื่องคิดเลข</span><button class="close-btn" onclick="closeWindow('win-calc')">X</button></div>
+  <div class="window-body">
+    <div id="calc-display">0</div>
+    <div class="calc-grid">
+      <button class="calc-btn" onclick="calcInput('7')">7</button><button class="calc-btn" onclick="calcInput('8')">8</button><button class="calc-btn" onclick="calcInput('9')">9</button><button class="calc-btn" onclick="calcInput('/')">÷</button>
+      <button class="calc-btn" onclick="calcInput('4')">4</button><button class="calc-btn" onclick="calcInput('5')">5</button><button class="calc-btn" onclick="calcInput('6')">6</button><button class="calc-btn" onclick="calcInput('*')">×</button>
+      <button class="calc-btn" onclick="calcInput('1')">1</button><button class="calc-btn" onclick="calcInput('2')">2</button><button class="calc-btn" onclick="calcInput('3')">3</button><button class="calc-btn" onclick="calcInput('-')">-</button>
+      <button class="calc-btn" onclick="calcClear()">C</button><button class="calc-btn" onclick="calcInput('0')">0</button><button class="calc-btn" onclick="calcResult()">=</button><button class="calc-btn" onclick="calcInput('+')">+</button>
+    </div>
+  </div>
+</div>
+
+<div class="window" id="win-game">
+  <div class="title-bar"><span>🎯 เกมกดเป้าหมาย (คะแนน: <span id="score">0</span>)</span><button class="close-btn" onclick="closeWindow('win-game')">X</button></div>
+  <div class="window-body">
+    <div id="game-area">
+      <div id="target" onclick="hitTarget()">👾</div>
+    </div>
+  </div>
+</div>
+
+<div class="window" id="win-info">
+  <div class="title-bar"><span>💻 เกี่ยวกับระบบ</span><button class="close-btn" onclick="closeWindow('win-info')">X</button></div>
+  <div class="window-body" style="font-size:14px; line-height:1.6;">
+    <b>ระบบปฏิบัติการ:</b> Mini WebOS v1.0<br>
+    <b>สถานะ:</b> ทำงานสมบูรณ์บนเบราว์เซอร์<br>
+    <b>หน่วยความจำ:</b> บันทึกโน้ตลงเครื่องอัตโนมัติ<br>
+    <b>คำแนะนำ:</b> ลองเปลี่ยนสีพื้นหลังได้ในเมนู Start!
+  </div>
+</div>
+
+<div id="start-menu">
+  <div class="menu-item" onclick="openWindow('win-note')">📝 เปิดสมุดโน้ต</div>
+  <div class="menu-item" onclick="openWindow('win-calc')">🧮 เปิดเครื่องคิดเลข</div>
+  <div class="menu-item" onclick="openWindow('win-game')">🎯 เล่นมินิเกม</div>
+  <div class="menu-item" onclick="changeBg()">🎨 เปลี่ยนสีพื้นหลัง</div>
+  <div class="menu-item" onclick="location.reload()">🔄 รีสตาร์ทระบบ</div>
+</div>
+
+<div id="taskbar">
+  <button id="start-btn" onclick="toggleStartMenu()">🪟 Start</button>
+  <div id="clock">00:00</div>
+</div>
+
+<script>
+  let topZ = 10;
+
+  function openWindow(id) {
+    closeStartMenu();
+    const win = document.getElementById(id);
+    win.style.display = 'flex';
+    topZ++;
+    win.style.zIndex = topZ;
+    if(id === 'win-game') moveTarget();
+  }
+  function closeWindow(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function toggleStartMenu() {
+    const menu = document.getElementById('start-menu');
+    menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+  }
+  function closeStartMenu() {
+    document.getElementById('start-menu').style.display = 'none';
+  }
+
+  const colors = ['#008080', '#1e272e', '#2c3e50', '#4a148c', '#004d40'];
+  let colorIdx = 0;
+  function changeBg() {
+    colorIdx = (colorIdx + 1) % colors.length;
+    document.body.style.background = colors[colorIdx];
+    closeStartMenu();
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('clock').innerText = h + ':' + m;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  const noteBox = document.getElementById('note-text');
+  noteBox.value = localStorage.getItem('webos_note') || '';
+  noteBox.addEventListener('input', () => localStorage.setItem('webos_note', noteBox.value));
+
+  let calcStr = '';
+  function calcInput(val) {
+    calcStr += val;
+    document.getElementById('calc-display').innerText = calcStr;
+  }
+  function calcClear() {
+    calcStr = '';
+    document.getElementById('calc-display').innerText = '0';
+  }
+  function calcResult() {
+    try {
+      calcStr = String(eval(calcStr));
+      document.getElementById('calc-display').innerText = calcStr;
+    } catch {
+      document.getElementById('calc-display').innerText = 'Error';
+      calcStr = '';
+    }
+  }
+
+  let score = 0;
+  function moveTarget() {
+    const area = document.getElementById('game-area');
+    const target = document.getElementById('target');
+    const maxX = area.clientWidth - 45;
+    const maxY = area.clientHeight - 45;
+    target.style.left = Math.floor(Math.random() * maxX) + 'px';
+    target.style.top = Math.floor(Math.random() * maxY) + 'px';
+  }
+  function hitTarget() {
+    score++;
+    document.getElementById('score').innerText = score;
+    moveTarget();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Windows 95 WebOS v3.2 - P2P File & Paint Transfer</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Tahoma', 'Segoe UI', sans-serif; }
+  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #008080; user-select: none; }
+  
+  #desktop {
+    width: 100%; height: calc(100% - 40px); padding: 14px;
+    display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 16px;
+    position: relative;
+  }
+
+  .icon {
+    width: 78px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    color: white; font-size: 12px; cursor: pointer; text-shadow: 1px 1px 1px #000;
+  }
+  .icon-box {
+    width: 44px; height: 44px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; margin-bottom: 4px;
+  }
+  .icon:active .icon-box { background: #000080; }
+
+  .window {
+    position: absolute; top: 24px; left: 4%; width: 92%; max-width: 440px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.4); display: none; flex-direction: column; z-index: 10;
+  }
+  .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: white;
+    padding: 5px 8px; font-weight: bold; font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center; cursor: move; touch-action: none;
+  }
+  .title-btns { display: flex; gap: 3px; }
+  .win-btn {
+    background: #c0c0c0; color: black; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    width: 22px; height: 20px; font-weight: bold; font-size: 11px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .win-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+  .window-body { padding: 8px; flex: 1; font-size: 13px; max-height: 78vh; overflow-y: auto; }
+
+  .btn-95 {
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    padding: 4px 8px; font-size: 12px; font-weight: bold; cursor: pointer; color: #000;
+  }
+  .btn-95:active { border-color: #404040 #ffffff #ffffff #404040; }
+  .btn-95:disabled { color: #777; cursor: not-allowed; }
+  .input-95 {
+    border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    background: #fff; padding: 4px 6px; font-size: 13px; user-select: text !important; -webkit-user-select: text !important;
+  }
+
+  /* Context Menu */
+  #context-menu {
+    position: fixed; width: 150px; background: #c0c0c0;
+    border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    box-shadow: 3px 3px 5px rgba(0,0,0,0.5); display: none; flex-direction: column; z-index: 9999;
+  }
+  .ctx-item { padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #a0a0a0; color: #000; }
+  .ctx-item:hover, .ctx-item:active { background: #000080; color: #fff; }
+
+  #taskbar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 40px;
+    background: #c0c0c0; border-top: 2px solid #ffffff;
+    display: flex; align-items: center; padding: 0 4px; gap: 4px; z-index: 1000;
+  }
+  #start-btn {
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    padding: 4px 10px; font-weight: bold; font-size: 13px; cursor: pointer; flex-shrink: 0;
+  }
+  #taskbar-apps { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+  .task-tab {
+    background: #d4d0c8; border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    padding: 4px 8px; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  }
+  #clock {
+    border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+    padding: 4px 8px; font-size: 12px; background: #c0c0c0; font-weight: bold; flex-shrink: 0;
+  }
+
+  #start-menu {
+    position: fixed; bottom: 40px; left: 4px; width: 200px;
+    background: #c0c0c0; border: 2px solid; border-color: #ffffff #404040 #404040 #ffffff;
+    display: none; flex-direction: column; z-index: 999; box-shadow: 3px -3px 6px rgba(0,0,0,0.4);
+  }
+  .menu-item { padding: 9px 12px; border-bottom: 1px solid #999; cursor: pointer; font-size: 13px; }
+  .menu-item:active { background: #000080; color: white; }
+
+  /* My Documents */
+  .file-list {
+    background: #fff; border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    height: 170px; overflow-y: auto; padding: 6px; margin-bottom: 8px;
+  }
+  .file-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px; border-bottom: 1px solid #eee;
+  }
+
+  /* Notepad */
+  #note-area {
+    width: 100%; height: 180px; resize: none; border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    padding: 6px; font-size: 14px; user-select: text !important; -webkit-user-select: text !important;
+  }
+
+  /* Paint */
+  .paint-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; align-items: center; }
+  .color-dot { width: 22px; height: 22px; border: 2px solid #404040; cursor: pointer; }
+  #paint-canvas {
+    background: #fff; border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    width: 100%; height: 200px; touch-action: none; display: block;
+  }
+
+  /* P2P Chat & File Transfer */
+  .p2p-box {
+    background: #d4d0c8; border: 1px solid #808080; padding: 6px; margin-bottom: 6px;
+  }
+  .code-row { display: flex; gap: 4px; margin-top: 4px; }
+  .code-input { flex: 1; font-size: 11px; }
+  #chat-log {
+    background: #fff; border: 2px solid; border-color: #404040 #ffffff #ffffff #404040;
+    height: 145px; overflow-y: auto; padding: 6px; margin-bottom: 6px; font-size: 12px;
+    user-select: text !important; -webkit-user-select: text !important;
+  }
+  .msg-me { color: #000080; margin-bottom: 6px; }
+  .msg-peer { color: #006400; margin-bottom: 6px; }
+  .msg-sys { color: #666; font-style: italic; margin-bottom: 6px; }
+  .file-card {
+    background: #f0f0f0; border: 1px solid #808080; padding: 6px; margin-top: 3px; border-radius: 3px;
+  }
+  .file-card img { max-width: 100%; max-height: 120px; display: block; margin: 4px 0; border: 1px solid #ccc; }
+  .status-badge { display: inline-block; padding: 2px 6px; font-size: 11px; font-weight: bold; color: #fff; background: #808080; }
+  .status-connected { background: #008000; }
+  .transfer-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #999; }
+</style>
+</head>
+<body>
+
+<div id="desktop">
+  <div class="icon" data-open="win-p2p">
+    <div class="icon-box">📡</div>
+    <span>ส่งไฟล์ & แชต</span>
+  </div>
+  <div class="icon" data-open="win-docs">
+    <div class="icon-box">📁</div>
+    <span>My Documents</span>
+  </div>
+  <div class="icon" data-open="win-note">
+    <div class="icon-box">📝</div>
+    <span>Notepad</span>
+  </div>
+  <div class="icon" data-open="win-paint">
+    <div class="icon-box">🎨</div>
+    <span>Paint</span>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu">
+  <div class="ctx-item" id="ctx-paste">📋 วาง (Paste)</div>
+  <div class="ctx-item" id="ctx-copy">📄 คัดลอก (Copy)</div>
+  <div class="ctx-item" id="ctx-select">🔘 เลือกทั้งหมด</div>
+  <div class="ctx-item" id="ctx-clear">🗑️ ล้างช่องนี้</div>
+</div>
+
+<!-- Window: P2P Chat & File Transfer -->
+<div class="window" id="win-p2p">
+  <div class="title-bar">
+    <span>📡 ส่งไฟล์ & แชตข้ามเครื่อง (P2P)</span>
+    <div class="title-btns">
+      <button class="win-btn" data-min="win-p2p">_</button>
+      <button class="win-btn" data-close="win-p2p">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <span>สถานะ: <span id="p2p-status" class="status-badge">ยังไม่เชื่อมต่อ</span></span>
+      <button class="btn-95" id="btn-reset-p2p">รีเซ็ตการเชื่อมต่อ</button>
+    </div>
+
+    <div id="p2p-setup" class="p2p-box">
+      <div style="margin-bottom:4px;"><b>เครื่องที่ 1 (สร้างห้อง):</b> กดสร้างรหัส แล้วส่งให้เครื่อง 2</div>
+      <div class="code-row">
+        <button class="btn-95" id="btn-create-offer">1. สร้างรหัสห้อง</button>
+        <input type="text" id="offer-out" class="input-95 code-input" readonly placeholder="รหัสห้องจะขึ้นตรงนี้...">
+        <button class="btn-95" id="btn-copy-offer">คัดลอก</button>
+      </div>
+
+      <div style="margin:6px 0 4px;"><b>เครื่องที่ 2 (เข้าห้อง):</b> วางรหัสจากเครื่อง 1 แล้วกดเข้าร่วม</div>
+      <div class="code-row">
+        <input type="text" id="offer-in" class="input-95 code-input" placeholder="วางรหัสจากเครื่อง 1 ที่นี่...">
+        <button class="btn-95" id="btn-paste-offer">วาง</button>
+        <button class="btn-95" id="btn-accept-offer">2. เข้าร่วม</button>
+      </div>
+
+      <div style="margin:6px 0 4px;"><b>รหัสตอบกลับ (ส่งคืนเครื่อง 1):</b></div>
+      <div class="code-row">
+        <input type="text" id="answer-box" class="input-95 code-input" placeholder="รหัสตอบกลับ / วางเพื่อยืนยัน...">
+        <button class="btn-95" id="btn-paste-answer">วาง</button>
+        <button class="btn-95" id="btn-copy-answer">คัดลอก</button>
+        <button class="btn-95" id="btn-finalize">3. ยืนยัน</button>
+      </div>
+    </div>
+
+    <div id="chat-log">
+      <div class="msg-sys">เชื่อมต่อ 2 เครื่องให้สำเร็จ เพื่อแชต โยนโน้ต ส่งภาพวาด Paint หรือส่งไฟล์ทุกชนิดหากันโดยตรง...</div>
+    </div>
+
+    <div style="display:flex; gap:4px; margin-bottom:4px;">
+      <input type="text" id="chat-input" class="input-95" style="flex:1;" placeholder="พิมพ์ข้อความแชต..." disabled>
+      <button class="btn-95" id="btn-paste-chat" disabled>วาง</button>
+      <button class="btn-95" id="btn-send-chat" disabled>ส่ง</button>
+    </div>
+
+    <!-- แผงส่งไฟล์ข้ามเครื่อง -->
+    <div class="transfer-tools">
+      <input type="file" id="p2p-file-picker" style="display:none;">
+      <button class="btn-95" id="btn-send-file" disabled>📎 เลือกไฟล์ส่ง</button>
+      <button class="btn-95" id="btn-send-paint" disabled>🎨 ส่งภาพจาก Paint</button>
+      <button class="btn-95" id="btn-send-note" disabled>📝 ส่งโน้ตปัจจุบัน</button>
+    </div>
+    <div id="transfer-progress" style="font-size:11px; color:#000080; margin-top:4px; display:none;"></div>
+  </div>
+</div>
+
+<!-- Window: My Documents -->
+<div class="window" id="win-docs">
+  <div class="title-bar">
+    <span>📁 My Documents</span>
+    <div class="title-btns">
+      <button class="win-btn" data-min="win-docs">_</button>
+      <button class="win-btn" data-close="win-docs">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; gap:4px; margin-bottom:8px;">
+      <input type="text" id="new-filename" class="input-95" style="flex:1;" placeholder="ตั้งชื่อไฟล์ใหม่...">
+      <button class="btn-95" id="btn-paste-doc">วาง</button>
+      <button class="btn-95" id="btn-create-doc">+ สร้างไฟล์</button>
+    </div>
+    <div class="file-list" id="doc-list"></div>
+  </div>
+</div>
+
+<!-- Window: Notepad -->
+<div class="window" id="win-note">
+  <div class="title-bar">
+    <span id="note-title">📝 Notepad - ไม่มีชื่อ</span>
+    <div class="title-btns">
+      <button class="win-btn" data-min="win-note">_</button>
+      <button class="win-btn" data-close="win-note">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div style="display:flex; gap:4px; margin-bottom:6px; align-items:center;">
+      <button class="btn-95" id="btn-save-note">💾 บันทึก</button>
+      <button class="btn-95" id="btn-paste-note">📋 วาง</button>
+      <button class="btn-95" id="btn-copy-note">📄 คัดลอก</button>
+      <span id="note-status" style="font-size:11px; color:green;"></span>
+    </div>
+    <textarea id="note-area" placeholder="พิมพ์ข้อความที่นี่..."></textarea>
+  </div>
+</div>
+
+<!-- Window: Paint -->
+<div class="window" id="win-paint">
+  <div class="title-bar">
+    <span>🎨 Paint</span>
+    <div class="title-btns">
+      <button class="win-btn" data-min="win-paint">_</button>
+      <button class="win-btn" data-close="win-paint">X</button>
+    </div>
+  </div>
+  <div class="window-body">
+    <div class="paint-tools">
+      <div class="color-dot" style="background:#000000;" data-color="#000000"></div>
+      <div class="color-dot" style="background:#ff0000;" data-color="#ff0000"></div>
+      <div class="color-dot" style="background:#0000ff;" data-color="#0000ff"></div>
+      <div class="color-dot" style="background:#008000;" data-color="#008000"></div>
+      <div class="color-dot" style="background:#ffffff;" data-color="#ffffff" title="ยางลบ"></div>
+      <button class="btn-95" id="btn-clear-paint">ล้างกระดาษ</button>
+      <button class="btn-95" id="btn-save-paint">💾 เซฟรูป</button>
+    </div>
+    <canvas id="paint-canvas" width="380" height="200"></canvas>
+  </div>
+</div>
+
+<!-- Start Menu -->
+<div id="start-menu">
+  <div class="menu-item" data-open="win-p2p">📡 ส่งไฟล์ & แชตข้ามเครื่อง</div>
+  <div class="menu-item" data-open="win-docs">📁 My Documents</div>
+  <div class="menu-item" data-open="win-note">📝 Notepad</div>
+  <div class="menu-item" data-open="win-paint">🎨 Paint</div>
+  <div class="menu-item" id="btn-bg-change">🖼️ เปลี่ยนสีพื้นหลัง</div>
+</div>
+
+<!-- Taskbar -->
+<div id="taskbar">
+  <button id="start-btn">🪟 Start</button>
+  <div id="taskbar-apps"></div>
+  <div id="clock">00:00</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  let topZ = 20;
+  const openApps = {};
+
+  function bringToFront(win) { topZ++; win.style.zIndex = topZ; }
+
+  function updateTaskbar() {
+    const bar = document.getElementById('taskbar-apps');
+    bar.innerHTML = '';
+    Object.keys(openApps).forEach(id => {
+      const tab = document.createElement('button');
+      tab.className = 'task-tab';
+      tab.textContent = openApps[id];
+      tab.addEventListener('click', () => {
+        const win = document.getElementById(id);
+        win.style.display = 'flex';
+        bringToFront(win);
+      });
+      bar.appendChild(tab);
+    });
+  }
+
+  function openApp(id) {
+    document.getElementById('start-menu').style.display = 'none';
+    const win = document.getElementById(id);
+    if (!win) return;
+    win.style.display = 'flex';
+    bringToFront(win);
+    openApps[id] = win.querySelector('.title-bar span').textContent;
+    updateTaskbar();
+    if (id === 'win-docs') renderDocs();
+  }
+
+  document.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); openApp(el.getAttribute('data-open')); });
+  });
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-close');
+      document.getElementById(id).style.display = 'none';
+      delete openApps[id];
+      updateTaskbar();
+    });
+  });
+  document.querySelectorAll('[data-min]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById(btn.getAttribute('data-min')).style.display = 'none';
+    });
+  });
+
+  // Start Menu & Clock
+  const startBtn = document.getElementById('start-btn');
+  const startMenu = document.getElementById('start-menu');
+  startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startMenu.style.display = startMenu.style.display === 'flex' ? 'none' : 'flex';
+  });
+  document.addEventListener('click', () => {
+    startMenu.style.display = 'none';
+    document.getElementById('context-menu').style.display = 'none';
+  });
+
+  const bgColors = ['#008080', '#1e272e', '#004d40', '#2c3e50', '#3b1e54'];
+  let bgIdx = 0;
+  document.getElementById('btn-bg-change').addEventListener('click', () => {
+    bgIdx = (bgIdx + 1) % bgColors.length;
+    document.body.style.background = bgColors[bgIdx];
+  });
+
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Draggable Windows
+  document.querySelectorAll('.window').forEach(win => {
+    win.addEventListener('mousedown', () => bringToFront(win));
+    win.addEventListener('touchstart', () => bringToFront(win), { passive: true });
+    const titleBar = win.querySelector('.title-bar');
+    let isDragging = false, startX, startY, origLeft, origTop;
+    const startDrag = (clientX, clientY) => {
+      isDragging = true; startX = clientX; startY = clientY;
+      origLeft = win.offsetLeft; origTop = win.offsetTop; bringToFront(win);
+    };
+    const moveDrag = (clientX, clientY) => {
+      if (!isDragging) return;
+      win.style.left = Math.max(0, origLeft + (clientX - startX)) + 'px';
+      win.style.top = Math.max(0, origTop + (clientY - startY)) + 'px';
+    };
+    titleBar.addEventListener('mousedown', (e) => { if (!e.target.closest('button')) startDrag(e.clientX, e.clientY); });
+    document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+    document.addEventListener('mouseup', () => { isDragging = false; });
+    titleBar.addEventListener('touchstart', (e) => {
+      if (!e.target.closest('button') && e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchend', () => { isDragging = false; });
+  });
+
+  // Context Menu & Clipboard Helpers
+  const ctxMenu = document.getElementById('context-menu');
+  let activeInputEl = null;
+  let longPressTimer = null;
+
+  async function pasteToElement(el) {
+    if (!el || el.disabled) return;
+    el.focus();
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        const start = el.selectionStart || 0;
+        const end = el.selectionEnd || 0;
+        el.value = el.value.slice(0, start) + text + el.value.slice(end);
+        el.dispatchEvent(new Event('input'));
+        return;
+      }
+    } catch (e) {}
+    const manual = prompt('เบราว์เซอร์บล็อกการเข้าถึงคลิปบอร์ดอัตโนมัติ กรุณากดค้างในช่องนี้เพื่อ "วาง" ข้อความ:');
+    if (manual !== null) {
+      el.value = manual;
+      el.dispatchEvent(new Event('input'));
+    }
+  }
+
+  function copyFromElement(el) {
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, 99999);
+    try {
+      navigator.clipboard.writeText(el.value);
+    } catch (e) {
+      document.execCommand('copy');
+    }
+  }
+
+  function showContextMenu(x, y, targetEl) {
+    activeInputEl = targetEl;
+    ctxMenu.style.display = 'flex';
+    const menuW = 155, menuH = 140;
+    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW) + 'px';
+    ctxMenu.style.top = Math.min(y, window.innerHeight - menuH) + 'px';
+  }
+
+  document.querySelectorAll('input[type="text"], textarea').forEach(el => {
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, el);
+    });
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        longPressTimer = setTimeout(() => {
+          showContextMenu(touch.clientX, touch.clientY, el);
+        }, 550);
+      }
+    }, { passive: true });
+    el.addEventListener('touchend', () => clearTimeout(longPressTimer));
+    el.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+  });
+
+  document.getElementById('ctx-paste').addEventListener('click', () => pasteToElement(activeInputEl));
+  document.getElementById('ctx-copy').addEventListener('click', () => copyFromElement(activeInputEl));
+  document.getElementById('ctx-select').addEventListener('click', () => { if (activeInputEl) { activeInputEl.focus(); activeInputEl.select(); } });
+  document.getElementById('ctx-clear').addEventListener('click', () => { if (activeInputEl && !activeInputEl.readOnly) { activeInputEl.value = ''; activeInputEl.dispatchEvent(new Event('input')); } });
+
+  // My Documents & Notepad
+  let docs = JSON.parse(localStorage.getItem('win95_docs') || '{"ยินดีต้อนรับ.txt":"ทดสอบส่งไฟล์รูปภาพ ภาพวาด Paint และเอกสารข้ามเครื่องได้เลย!"}');
+  let currentFile = 'ยินดีต้อนรับ.txt';
+
+  function saveDocsStorage() { localStorage.setItem('win95_docs', JSON.stringify(docs)); }
+
+  function renderDocs() {
+    const list = document.getElementById('doc-list');
+    list.innerHTML = '';
+    Object.keys(docs).forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'file-item';
+      const label = document.createElement('span');
+      label.textContent = '📄 ' + name;
+      const actions = document.createElement('div');
+      const openBtn = document.createElement('button');
+      openBtn.className = 'btn-95'; openBtn.textContent = 'เปิด';
+      openBtn.addEventListener('click', () => openDocInNotepad(name));
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-95'; delBtn.textContent = 'ลบ'; delBtn.style.marginLeft = '4px';
+      delBtn.addEventListener('click', () => {
+        if (confirm('ลบไฟล์ "' + name + '" ใช่ไหม?')) { delete docs[name]; saveDocsStorage(); renderDocs(); }
+      });
+      actions.appendChild(openBtn); actions.appendChild(delBtn);
+      row.appendChild(label); row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  function openDocInNotepad(name) {
+    currentFile = name;
+    document.getElementById('note-title').textContent = '📝 Notepad - ' + name;
+    document.getElementById('note-area').value = docs[name] || '';
+    openApp('win-note');
+  }
+
+  document.getElementById('btn-paste-doc').addEventListener('click', () => pasteToElement(document.getElementById('new-filename')));
+  document.getElementById('btn-create-doc').addEventListener('click', () => {
+    const input = document.getElementById('new-filename');
+    let name = input.value.trim();
+    if (!name) return alert('กรุณาตั้งชื่อไฟล์ก่อนครับ');
+    if (!name.endsWith('.txt')) name += '.txt';
+    if (!docs[name]) docs[name] = '';
+    saveDocsStorage(); input.value = ''; renderDocs(); openDocInNotepad(name);
+  });
+
+  document.getElementById('btn-save-note').addEventListener('click', () => {
+    docs[currentFile] = document.getElementById('note-area').value;
+    saveDocsStorage();
+    const st = document.getElementById('note-status');
+    st.textContent = 'บันทึกแล้ว!'; setTimeout(() => st.textContent = '', 2000);
+  });
+  document.getElementById('btn-paste-note').addEventListener('click', () => pasteToElement(document.getElementById('note-area')));
+  document.getElementById('btn-copy-note').addEventListener('click', () => copyFromElement(document.getElementById('note-area')));
+  document.getElementById('note-area').value = docs[currentFile] || '';
+
+  // Paint App
+  const canvas = document.getElementById('paint-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let painting = false, brushColor = '#000000';
+
+  document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('click', () => { brushColor = dot.getAttribute('data-color'); });
+  });
+  document.getElementById('btn-clear-paint').addEventListener('click', () => {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  });
+  document.getElementById('btn-save-paint').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'my_paint_drawing.png'; link.href = canvas.toDataURL(); link.click();
+  });
+
+  function getCanvasPos(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+  }
+  function drawPoint(x, y) {
+    ctx.fillStyle = brushColor; ctx.beginPath();
+    ctx.arc(x, y, brushColor === '#ffffff' ? 10 : 3, 0, Math.PI * 2); ctx.fill();
+  }
+  canvas.addEventListener('mousedown', (e) => { painting = true; const p = getCanvasPos(e.clientX, e.clientY); drawPoint(p.x, p.y); });
+  canvas.addEventListener('mousemove', (e) => { if (painting) { const p = getCanvasPos(e.clientX, e.clientY); drawPoint(p.x, p.y); } });
+  window.addEventListener('mouseup', () => { painting = false; });
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault(); painting = true; const p = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY); drawPoint(p.x, p.y);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault(); if (painting) { const p = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY); drawPoint(p.x, p.y); }
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => { painting = false; });
+
+  // WebRTC P2P Chat & Chunked File Transfer
+  let pc = null;
+  let dataChannel = null;
+  const CHUNK_SIZE = 16384; // 16KB per chunk for reliable WebRTC delivery
+  let incomingFiles = {};
+
+  const statusBadge = document.getElementById('p2p-status');
+  const chatLog = document.getElementById('chat-log');
+  const chatInput = document.getElementById('chat-input');
+  const btnSendChat = document.getElementById('btn-send-chat');
+  const btnPasteChat = document.getElementById('btn-paste-chat');
+  const btnSendFile = document.getElementById('btn-send-file');
+  const btnSendPaint = document.getElementById('btn-send-paint');
+  const btnSendNote = document.getElementById('btn-send-note');
+  const progressEl = document.getElementById('transfer-progress');
+
+  function logChat(text, cls) {
+    const div = document.createElement('div');
+    div.className = cls;
+    div.textContent = text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function renderFileMessage(fileName, mimeType, blobUrl, isMe) {
+    const wrapper = document.createElement('div');
+    wrapper.className = isMe ? 'msg-me' : 'msg-peer';
+    
+    const header = document.createElement('div');
+    header.textContent = (isMe ? 'ฉันส่งไฟล์: ' : 'เพื่อนส่งไฟล์: ') + fileName;
+    wrapper.appendChild(header);
+
+    const card = document.createElement('div');
+    card.className = 'file-card';
+
+    if (mimeType && mimeType.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = blobUrl;
+      card.appendChild(img);
+    }
+
+    const dlBtn = document.createElement('a');
+    dlBtn.href = blobUrl;
+    dlBtn.download = fileName;
+    dlBtn.className = 'btn-95';
+    dlBtn.style.display = 'inline-block';
+    dlBtn.style.textDecoration = 'none';
+    dlBtn.textContent = '💾 บันทึกไฟล์ (' + fileName + ')';
+    card.appendChild(dlBtn);
+
+    wrapper.appendChild(card);
+    chatLog.appendChild(wrapper);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function setConnectedUI(connected) {
+    if (connected) {
+      statusBadge.textContent = 'เชื่อมต่อแล้ว!';
+      statusBadge.className = 'status-badge status-connected';
+      chatInput.disabled = false;
+      btnSendChat.disabled = false;
+      btnPasteChat.disabled = false;
+      btnSendFile.disabled = false;
+      btnSendPaint.disabled = false;
+      btnSendNote.disabled = false;
+      document.getElementById('p2p-setup').style.display = 'none';
+      logChat('--- เชื่อมต่อสำเร็จ! ส่งข้อความ รูปภาพ ภาพวาด Paint หรือไฟล์ทุกชนิดได้ทันที ---', 'msg-sys');
+    } else {
+      statusBadge.textContent = 'ยังไม่เชื่อมต่อ';
+      statusBadge.className = 'status-badge';
+      chatInput.disabled = true;
+      btnSendChat.disabled = true;
+      btnPasteChat.disabled = true;
+      btnSendFile.disabled = true;
+      btnSendPaint.disabled = true;
+      btnSendNote.disabled = true;
+      document.getElementById('p2p-setup').style.display = 'block';
+    }
+  }
+
+  function setupChannel(channel) {
+    channel.binaryType = 'arraybuffer';
+    channel.onopen = () => setConnectedUI(true);
+    channel.onclose = () => {
+      setConnectedUI(false);
+      logChat('--- การเชื่อมต่อถูกตัด ---', 'msg-sys');
+    };
+    channel.onmessage = (e) => {
+      if (typeof e.data === 'string') {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'chat') {
+            logChat('เพื่อน: ' + msg.text, 'msg-peer');
+          } else if (msg.type === 'note') {
+            docs[msg.fileName] = msg.content;
+            saveDocsStorage();
+            logChat('เพื่อนส่งไฟล์โน้ต "' + msg.fileName + '" เข้า My Documents แล้ว!', 'msg-sys');
+            openDocInNotepad(msg.fileName);
+          } else if (msg.type === 'file-meta') {
+            incomingFiles[msg.id] = {
+              name: msg.name,
+              mime: msg.mime,
+              size: msg.size,
+              totalChunks: msg.totalChunks,
+              receivedChunks: 0,
+              chunks: new Array(msg.totalChunks)
+            };
+            progressEl.style.display = 'block';
+            progressEl.textContent = 'กำลังรับไฟล์: ' + msg.name + ' (0%)';
+          } else if (msg.type === 'file-chunk') {
+            const fileObj = incomingFiles[msg.id];
+            if (fileObj) {
+              fileObj.chunks[msg.index] = msg.data;
+              fileObj.receivedChunks++;
+              const pct = Math.round((fileObj.receivedChunks / fileObj.totalChunks) * 100);
+              progressEl.textContent = 'กำลังรับไฟล์: ' + fileObj.name + ' (' + pct + '%)';
+
+              if (fileObj.receivedChunks === fileObj.totalChunks) {
+                const fullBase64 = fileObj.chunks.join('');
+                fetch(fullBase64)
+                  .then(res => res.blob())
+                  .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    renderFileMessage(fileObj.name, fileObj.mime, url, false);
+                    progressEl.style.display = 'none';
+                    delete incomingFiles[msg.id];
+                  });
+              }
+            }
+          }
+        } catch (err) {}
+      }
+    };
+  }
+
+  function sendBlobOverP2P(blob, fileName, mimeType) {
+    if (!dataChannel || dataChannel.readyState !== 'open') return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const totalChunks = Math.ceil(dataUrl.length / CHUNK_SIZE);
+      const fileId = 'f_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+      dataChannel.send(JSON.stringify({
+        type: 'file-meta',
+        id: fileId,
+        name: fileName,
+        mime: mimeType || blob.type || 'application/octet-stream',
+        size: blob.size,
+        totalChunks: totalChunks
+      }));
+
+      progressEl.style.display = 'block';
+      let index = 0;
+
+      function sendNextChunk() {
+        while (index < totalChunks) {
+          if (dataChannel.bufferedAmount > 65536) {
+            setTimeout(sendNextChunk, 30);
+            return;
+          }
+          const slice = dataUrl.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
+          dataChannel.send(JSON.stringify({
+            type: 'file-chunk',
+            id: fileId,
+            index: index,
+            data: slice
+          }));
+          index++;
+          const pct = Math.round((index / totalChunks) * 100);
+          progressEl.textContent = 'กำลังส่งไฟล์: ' + fileName + ' (' + pct + '%)';
+        }
+        progressEl.style.display = 'none';
+        const localUrl = URL.createObjectURL(blob);
+        renderFileMessage(fileName, mimeType || blob.type, localUrl, true);
+      }
+
+      sendNextChunk();
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  function initPeerConnection() {
+    if (pc) pc.close();
+    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  }
+
+  document.getElementById('btn-create-offer').addEventListener('click', async () => {
+    initPeerConnection();
+    dataChannel = pc.createDataChannel('win95_p2p');
+    setupChannel(dataChannel);
+    const offerOut = document.getElementById('offer-out');
+    offerOut.value = 'กำลังสร้างรหัส...';
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) offerOut.value = btoa(JSON.stringify(pc.localDescription));
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+  });
+
+  document.getElementById('btn-copy-offer').addEventListener('click', () => {
+    copyFromElement(document.getElementById('offer-out'));
+    alert('คัดลอกรหัสห้องแล้ว! ส่งไปวางในเครื่องที่ 2 ได้เลย');
+  });
+
+  document.getElementById('btn-paste-offer').addEventListener('click', () => pasteToElement(document.getElementById('offer-in')));
+  document.getElementById('btn-paste-answer').addEventListener('click', () => pasteToElement(document.getElementById('answer-box')));
+
+  document.getElementById('btn-accept-offer').addEventListener('click', async () => {
+    const raw = document.getElementById('offer-in').value.trim();
+    if (!raw) return alert('กรุณาวางรหัสจากเครื่องที่ 1 ก่อนครับ');
+    try {
+      initPeerConnection();
+      pc.ondatachannel = (e) => { dataChannel = e.channel; setupChannel(dataChannel); };
+      const answerBox = document.getElementById('answer-box');
+      answerBox.value = 'กำลังสร้างรหัสตอบกลับ...';
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) answerBox.value = btoa(JSON.stringify(pc.localDescription));
+      };
+      await pc.setRemoteDescription(JSON.parse(atob(raw)));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+    } catch (err) {
+      alert('รหัสไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+    }
+  });
+
+  document.getElementById('btn-copy-answer').addEventListener('click', () => {
+    copyFromElement(document.getElementById('answer-box'));
+    alert('คัดลอกรหัสตอบกลับแล้ว! ส่งคืนให้เครื่องที่ 1 ได้เลย');
+  });
+
+  document.getElementById('btn-finalize').addEventListener('click', async () => {
+    const raw = document.getElementById('answer-box').value.trim();
+    if (!raw || !pc) return alert('กรุณาวางรหัสตอบกลับจากเครื่องที่ 2 ก่อนครับ');
+    try {
+      await pc.setRemoteDescription(JSON.parse(atob(raw)));
+    } catch (err) {
+      alert('รหัสตอบกลับไม่ถูกต้อง');
+    }
+  });
+
+  document.getElementById('btn-reset-p2p').addEventListener('click', () => {
+    if (pc) pc.close();
+    document.getElementById('offer-out').value = '';
+    document.getElementById('offer-in').value = '';
+    document.getElementById('answer-box').value = '';
+    setConnectedUI(false);
+  });
+
+  function sendChat() {
+    const txt = chatInput.value.trim();
+    if (!txt || !dataChannel || dataChannel.readyState !== 'open') return;
+    dataChannel.send(JSON.stringify({ type: 'chat', text: txt }));
+    logChat('ฉัน: ' + txt, 'msg-me');
+    chatInput.value = '';
+  }
+
+  btnSendChat.addEventListener('click', sendChat);
+  btnPasteChat.addEventListener('click', () => pasteToElement(chatInput));
+  chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+
+  // Send File Picker
+  const filePicker = document.getElementById('p2p-file-picker');
+  btnSendFile.addEventListener('click', () => filePicker.click());
+  filePicker.addEventListener('change', () => {
+    if (filePicker.files.length > 0) {
+      const file = filePicker.files[0];
+      sendBlobOverP2P(file, file.name, file.type);
+      filePicker.value = '';
+    }
+  });
+
+  // Send Paint Canvas
+  btnSendPaint.addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const fileName = 'paint_' + Date.now() + '.png';
+        sendBlobOverP2P(blob, fileName, 'image/png');
+      }
+    }, 'image/png');
+  });
+
+  // Send Notepad Content
+  btnSendNote.addEventListener('click', () => {
+    if (!dataChannel || dataChannel.readyState !== 'open') return;
+    const content = document.getElementById('note-area').value;
+    dataChannel.send(JSON.stringify({ type: 'note', fileName: currentFile, content: content }));
+    logChat('ฉันส่งไฟล์โน้ต "' + currentFile + '" ไปให้เพื่อนแล้ว', 'msg-me');
+  });
+});
+</script>
+</body>
+</html>

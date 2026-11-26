@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>USB OTG Live Coder & Board Controller</title>
+  <style>
+    :root {
+      --bg: #0f111a;
+      --card: #1a1d2d;
+      --primary: #00e676;
+      --secondary: #2979ff;
+      --warning: #ffab00;
+      --danger: #ff1744;
+      --text: #e0e6ed;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 14px; background: var(--bg); color: var(--text); }
+    .card {
+      background: var(--card); border-radius: 12px;
+      padding: 14px; margin-bottom: 14px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      border: 1px solid #2a2f45;
+    }
+    h2, h3 { margin: 0 0 10px 0; font-size: 18px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select, input, button {
+      padding: 10px 14px; border-radius: 8px; border: none; font-size: 15px;
+    }
+    select, input { background: #121420; color: white; border: 1px solid #353b54; }
+    button { font-weight: bold; cursor: pointer; transition: 0.15s; }
+    button:active { transform: scale(0.97); }
+    .btn-green { background: var(--primary); color: #000; }
+    .btn-blue { background: var(--secondary); color: #fff; }
+    .btn-red { background: var(--danger); color: #fff; }
+    .btn-orange { background: var(--warning); color: #000; }
+    .badge {
+      padding: 4px 10px; border-radius: 20px; font-size: 12px;
+      background: #2c3147; color: #aaa; font-weight: bold;
+    }
+    .badge.connected { background: rgba(0, 230, 118, 0.2); color: var(--primary); }
+    textarea {
+      width: 100%; height: 190px; background: #090a10; color: #a6accd;
+      font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.4;
+      padding: 12px; border-radius: 8px; border: 1px solid #353b54;
+      resize: vertical; tab-size: 2;
+    }
+    #serialMonitor {
+      width: 100%; height: 130px; background: #000; color: #00e676;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      padding: 10px; border-radius: 8px; overflow-y: auto;
+      border: 1px solid #2a2f45; margin-top: 8px;
+    }
+    .hint { font-size: 12px; color: #8f9ba8; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- ส่วนที่ 1: เชื่อมต่อสาย USB OTG -->
+  <div class="card">
+    <div class="row" style="justify-content: space-between;">
+      <h2>🔌 USB OTG Live Coder</h2>
+      <span id="connStatus" class="badge">ยังไม่เชื่อมต่อ</span>
+    </div>
+    <div class="row" style="margin-top: 10px;">
+      <select id="baudRate">
+        <option value="9600">9600 Baud (Arduino)</option>
+        <option value="115200" selected>115200 Baud (ESP32)</option>
+      </select>
+      <button id="btnConnect" class="btn-blue" style="flex:1;">เชื่อมต่อบอร์ด (USB OTG)</button>
+      <button id="btnDisconnect" class="btn-red" style="display:none;">ตัดการเชื่อมต่อ</button>
+    </div>
+    <div class="hint">
+      รองรับสาย OTG บน Android Chrome (WebUSB) และคอมพิวเตอร์ (Web Serial)
+    </div>
+  </div>
+
+  <!-- ส่วนที่ 2: หน้าต่างเขียนโค้ดสั่งงานสด (Live Script) -->
+  <div class="card">
+    <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+      <h3>💻 Live Script (JavaScript)</h3>
+      <div class="row">
+        <button id="btnRun" class="btn-green">▶ รันโค้ด</button>
+        <button id="btnStop" class="btn-orange">⏹ หยุด</button>
+      </div>
+    </div>
+    <textarea id="codeEditor" spellcheck="false">// ตัวอย่าง: สั่งไฟ LED บนบอร์ดกะพริบทุก 1 วินาที
+// คำสั่งที่ใช้ได้:
+// await send("ข้อความ\n") -> ส่งคำสั่งไปที่บอร์ด
+// await sleep(ms) -> หน่วงเวลา (มิลลิวินาที)
+// log("ข้อความ") -> แสดงผลบนหน้าจอ
+
+log("เริ่มรันสคริปต์ควบคุมบอร์ด...");
+
+while (isRunning) {
+  await send("CMD:LED_ON\n");
+  log("สั่งเปิดไฟ (LED ON)");
+  await sleep(1000);
+  
+  if (!isRunning) break;
+  
+  await send("CMD:LED_OFF\n");
+  log("สั่งปิดไฟ (LED OFF)");
+  await sleep(1000);
+}</textarea>
+    <div class="row" style="margin-top: 8px;">
+      <button class="btn-blue" style="font-size:12px; padding:6px 10px;" onclick="loadPreset('blink')">โหลดตัวอย่าง: ไฟกะพริบ</button>
+      <button class="btn-blue" style="font-size:12px; padding:6px 10px;" onclick="loadPreset('sweep')">โหลดตัวอย่าง: ไล่ค่า PWM/Servo</button>
+    </div>
+  </div>
+
+  <!-- ส่วนที่ 3: Serial Monitor -->
+  <div class="card">
+    <div class="row" style="justify-content: space-between;">
+      <h3>📡 Serial Monitor</h3>
+      <span style="font-size:12px; color:#888; cursor:pointer;" onclick="document.getElementById('serialMonitor').innerHTML=''">ล้างหน้าจอ</span>
+    </div>
+    <div class="row" style="margin-top: 6px;">
+      <input type="text" id="rawCmd" placeholder="พิมพ์คำสั่งส่งตรงเข้าบอร์ด เช่น CMD:LED_ON" style="flex:1;">
+      <button id="btnSendRaw" class="btn-green">ส่ง</button>
+    </div>
+    <div id="serialMonitor"></div>
+  </div>
+
+  <script type="module">
+    import { serial as polyfillSerial } from 'https://esm.run/web-serial-polyfill';
+
+    // เลือกใช้ Web Serial ปกติบนคอมฯ หรือสลับไปใช้ WebUSB Polyfill บนมือถือ Android อัตโนมัติ
+    const serialAPI = ('serial' in navigator) ? navigator.serial : polyfillSerial;
+
+    let port = null;
+    let writer = null;
+    let reader = null;
+    let keepReading = false;
+    window.isRunning = false;
+
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // ฟังก์ชันแสดงข้อความใน Monitor
+    window.log = (msg, type = 'sys') => {
+      const box = document.getElementById('serialMonitor');
+      const time = new Date().toLocaleTimeString();
+      const color = type === 'rx' ? '#00e676' : (type === 'tx' ? '#29b6f6' : '#ffab00');
+      box.innerHTML += `<div style="color:${color}">[${time}] ${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    };
+
+    // ฟังก์ชันส่งข้อมูลไปที่บอร์ด
+    window.send = async (text) => {
+      if (!writer) {
+        log('⚠️ ยังไม่ได้เชื่อมต่อบอร์ด!', 'sys');
+        return;
+      }
+      await writer.write(encoder.encode(text));
+      log(`TX > ${text.trim()}`, 'tx');
+    };
+
+    // ฟังก์ชันหน่วงเวลาสำหรับใช้ใน Live Script
+    window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // เชื่อมต่อพอร์ต USB OTG
+    document.getElementById('btnConnect').addEventListener('click', async () => {
+      try {
+        const baud = parseInt(document.getElementById('baudRate').value);
+        port = await serialAPI.requestPort();
+        await port.open({ baudRate: baud });
+
+        writer = port.writable.getWriter();
+        keepReading = true;
+        readLoop();
+
+        document.getElementById('connStatus').innerText = 'เชื่อมต่อแล้ว ✅';
+        document.getElementById('connStatus').classList.add('connected');
+        document.getElementById('btnConnect').style.display = 'none';
+        document.getElementById('btnDisconnect').style.display = 'inline-block';
+        log(`เชื่อมต่อพอร์ตสำเร็จ (${baud} bps)`, 'sys');
+      } catch (err) {
+        log('❌ เชื่อมต่อไม่สำเร็จ: ' + err.message, 'sys');
+      }
+    });
+
+    // อ่านข้อมูลจากบอร์ดต่อเนื่อง
+    async function readLoop() {
+      let buffer = '';
+      while (port && port.readable && keepReading) {
+        reader = port.readable.getReader();
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+              for (const line of lines) {
+                if (line.trim()) log(`RX < ${line.trim()}`, 'rx');
+              }
+            }
+          }
+        } catch (err) {
+          log('⚠️ การอ่านข้อมูลสะดุด: ' + err.message, 'sys');
+        } finally {
+          reader.releaseLock();
+        }
+      }
+    }
+
+    // ตัดการเชื่อมต่อ
+    document.getElementById('btnDisconnect').addEventListener('click', async () => {
+      window.isRunning = false;
+      keepReading = false;
+      if (reader) await reader.cancel();
+      if (writer) writer.releaseLock();
+      if (port) await port.close();
+      port = null; writer = null;
+
+      document.getElementById('connStatus').innerText = 'ยังไม่เชื่อมต่อ';
+      document.getElementById('connStatus').classList.remove('connected');
+      document.getElementById('btnConnect').style.display = 'inline-block';
+      document.getElementById('btnDisconnect').style.display = 'none';
+      log('ตัดการเชื่อมต่อเรียบร้อย', 'sys');
+    });
+
+    // รันโค้ดจาก Editor
+    document.getElementById('btnRun').addEventListener('click', async () => {
+      if (window.isRunning) return;
+      window.isRunning = true;
+      const code = document.getElementById('codeEditor').value;
+      try {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const userScript = new AsyncFunction(code);
+        await userScript();
+      } catch (err) {
+        log('❌ โค้ดมีข้อผิดพลาด: ' + err.message, 'sys');
+      } finally {
+        window.isRunning = false;
+        log('⏹ จบการทำงานของสคริปต์', 'sys');
+      }
+    });
+
+    // หยุดรันโค้ด
+    document.getElementById('btnStop').addEventListener('click', () => {
+      window.isRunning = false;
+      log('กำลังสั่งหยุดสคริปต์...', 'sys');
+    });
+
+    // ส่งคำสั่งจากช่อง Serial Monitor
+    document.getElementById('btnSendRaw').addEventListener('click', () => {
+      const input = document.getElementById('rawCmd');
+      if (!input.value.trim()) return;
+      window.send(input.value.trim() + '\n');
+      input.value = '';
+    });
+
+    // โหลดตัวอย่างโค้ด
+    window.loadPreset = (type) => {
+      const editor = document.getElementById('codeEditor');
+      if (type === 'blink') {
+        editor.value = `log("เริ่มรันสคริปต์ไฟกะพริบ...");\nwhile (isRunning) {\n  await send("CMD:LED_ON\\n");\n  await sleep(1000);\n  if (!isRunning) break;\n  await send("CMD:LED_OFF\\n");\n  await sleep(1000);\n}`;
+      } else if (type === 'sweep') {
+        editor.value = `log("เริ่มไล่ระดับค่า 0 ถึง 100...");\nfor (let i = 0; i <= 100; i += 10) {\n  if (!isRunning) break;\n  await send(\`VAL:\${i}\\n\`);\n  await sleep(300);\n}`;
+      }
+    };
+  </script>
+</body>
+</html>
