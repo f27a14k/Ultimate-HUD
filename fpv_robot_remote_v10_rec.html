@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FPV Robot Remote v10 REC & Hardware</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #0b0f19; color: #e2e8f0; overscroll-behavior: none; touch-action: none;
+  }
+
+  /* Setup Screen */
+  #setup-screen {
+    position: fixed; inset: 0; background: linear-gradient(135deg, #0f172a, #1e293b);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; z-index: 1000; overflow-y: auto; touch-action: auto;
+  }
+  .card {
+    background: rgba(30, 41, 59, 0.95); border: 1px solid #334155; border-radius: 16px;
+    padding: 20px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .card h2 { margin: 0 0 15px 0; text-align: center; color: #38bdf8; font-size: 20px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #475569;
+    background: #0f172a; color: white; font-size: 16px; user-select: text; -webkit-user-select: text;
+  }
+  .role-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+  .role-btn {
+    padding: 12px; border: 2px solid #334155; border-radius: 10px; background: #0f172a;
+    color: #cbd5e1; font-weight: bold; cursor: pointer; text-align: center; font-size: 14px;
+  }
+  .role-btn.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+  #connect-btn {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: linear-gradient(90deg, #0284c7, #2563eb); color: white;
+    font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  }
+  #status-msg { margin-top: 12px; text-align: center; font-size: 13px; color: #fbbf24; min-height: 20px; }
+
+  /* Remote Gaming HUD */
+  #remote-ui { display: none; position: fixed; inset: 0; background: #000; }
+  #remote-video { width: 100%; height: 100%; object-fit: cover; }
+  
+  /* Artificial Horizon Gyro */
+  #gyro-hud {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 200px; height: 200px; pointer-events: none; display: flex; align-items: center; justify-content: center;
+  }
+  #horizon-line {
+    width: 160px; height: 2px; background: rgba(56, 189, 248, 0.7);
+    position: relative; transition: transform 0.1s linear;
+  }
+  #horizon-line::before, #horizon-line::after {
+    content: ''; position: absolute; width: 10px; height: 6px; border: 2px solid rgba(56, 189, 248, 0.7); top: -4px;
+  }
+  #horizon-line::before { left: 0; border-right: none; }
+  #horizon-line::after { right: 0; border-left: none; }
+  #crosshair {
+    position: absolute; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.5); border-radius: 50%;
+  }
+
+  /* Top Bar Telemetry */
+  #top-hud {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 20;
+  }
+  .hud-box {
+    background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 10px;
+    font-size: 11px; line-height: 1.4; pointer-events: auto;
+  }
+  .badge-online { color: #4ade80; font-weight: bold; }
+  .badge-rec { color: #ef4444; font-weight: bold; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  /* Action Controls Bar */
+  #action-bar {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; z-index: 25; max-width: 55%;
+  }
+  .hud-btn {
+    background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.25);
+    color: white; padding: 6px 9px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;
+  }
+  .hud-btn:active { transform: scale(0.95); }
+  .hud-btn.rec-active { background: #dc2626; border-color: #fca5a5; }
+  .hud-btn.estop { background: #991b1b; border-color: #f87171; color: #fecaca; }
+
+  /* Mini Map Radar */
+  #minimap-box {
+    position: absolute; top: 68px; right: 8px; width: 110px; height: 110px;
+    background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 50%; overflow: hidden; z-index: 20; cursor: pointer;
+  }
+  #radar-canvas { width: 100%; height: 100%; }
+
+  /* Floating Joysticks Zones */
+  #left-zone, #right-zone {
+    position: absolute; top: 60px; bottom: 0; width: 50%; z-index: 10;
+  }
+  #left-zone { left: 0; }
+  #right-zone { right: 0; }
+  .joy-base {
+    position: absolute; width: 110px; height: 110px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); border: 2px solid rgba(56, 189, 248, 0.5);
+    transform: translate(-50%, -50%); display: none; pointer-events: none;
+  }
+  .joy-stick {
+    position: absolute; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(56, 189, 248, 0.85); top: 50%; left: 50%;
+    transform: translate(-50%, -50%); box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+  }
+
+  /* Rover UI */
+  #rover-ui {
+    display: none; position: fixed; inset: 0; background: #090d16;
+    flex-direction: column; padding: 15px; overflow-y: auto; z-index: 50; touch-action: auto;
+  }
+  #local-video { width: 100%; max-height: 220px; background: #000; border-radius: 12px; object-fit: cover; border: 1px solid #334155; }
+  .hw-panel {
+    background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 12px; margin-top: 12px;
+  }
+  .hw-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .hw-btn {
+    padding: 10px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 13px; color: white;
+  }
+  .btn-usb { background: #0284c7; }
+  .btn-ble { background: #7c3aed; }
+  #telemetry-log {
+    margin-top: 10px; background: #0f172a; padding: 10px; border-radius: 8px;
+    font-family: monospace; font-size: 12px; color: #38bdf8; min-height: 60px;
+  }
+</style>
+</head>
+<body>
+
+<!-- หน้าตั้งค่าเชื่อมต่อ -->
+<div id="setup-screen">
+  <div class="card">
+    <h2>📡 FPV Robot Remote v10</h2>
+    <div class="role-btns">
+      <div class="role-btn active" id="btn-role-remote" onclick="selectRole('remote')">🎮 รีโมทบังคับ<br><small>(Controller)</small></div>
+      <div class="role-btn" id="btn-role-rover" onclick="selectRole('rover')">🤖 ตัวหุ่นยนต์<br><small>(Rover Cam)</small></div>
+    </div>
+    <div class="form-group">
+      <label>รหัสลับส่วนตัว (Secret PIN)</label>
+      <input type="text" id="secret-pin" value="9999" placeholder="ตั้งรหัสให้ตรงกัน 2 เครื่อง">
+    </div>
+    <div class="form-group">
+      <label>เลือกช่องสัญญาณ (Channel)</label>
+      <select id="channel-select"></select>
+    </div>
+    <button id="connect-btn" onclick="startSystem()">⚡ เปิดเครื่อง & จูนช่องสัญญาณ</button>
+    <div id="status-msg">พร้อมเชื่อมต่อ...</div>
+  </div>
+</div>
+
+<!-- หน้าจอฝั่งรีโมท (REMOTE HUD) -->
+<div id="remote-ui">
+  <video id="remote-video" autoplay playsinline></video>
+  
+  <div id="gyro-hud">
+    <div id="horizon-line"></div>
+    <div id="crosshair"></div>
+  </div>
+
+  <div id="top-hud">
+    <div class="hud-box">
+      <div>สถานะ: <span id="hud-status" class="badge-online">รอสัญญาณ...</span> <span id="rec-indicator" style="display:none;" class="badge-rec">● REC 00:00</span></div>
+      <div>ความหน่วง: <span id="hud-ping">--</span> ms | <span id="hud-fps">--</span> FPS</div>
+      <div>เน็ต: <span id="hud-bw">0 KB/s</span> | รวม: <span id="hud-data">0.00 MB</span></div>
+    </div>
+    <div class="hud-box" style="text-align:right;">
+      <div>แบตรถ: <span id="hud-bat">--%</span></div>
+      <div>เอียง: P:<span id="hud-pitch">0</span>° R:<span id="hud-roll">0</span>°</div>
+      <div>ความเร็ว: <span id="hud-speed">0.0</span> km/h | <span id="hud-dist">0</span>m</div>
+    </div>
+  </div>
+
+  <div id="action-bar">
+    <button class="hud-btn" id="btn-rec" onclick="toggleRecord()">🔴 REC</button>
+    <button class="hud-btn" onclick="takeSnapshot()">📸 แคปภาพ</button>
+    <button class="hud-btn" id="btn-mode" onclick="cycleDriveMode()">🚗 โหมด: แยกแกน</button>
+    <button class="hud-btn" onclick="sendCmd({type:'switchCam'})">🔄 สลับกล้อง</button>
+    <button class="hud-btn" onclick="sendCmd({type:'toggleFlash'})">💡 แฟลช</button>
+    <button class="hud-btn" onclick="sendCmd({type:'horn'})">📢 แตร</button>
+    <button class="hud-btn" id="btn-qual" onclick="cycleQuality()">📺 480p</button>
+    <button class="hud-btn estop" onclick="triggerEstop()">🛑 E-STOP</button>
+  </div>
+
+  <div id="minimap-box" onclick="openGoogleMaps()" title="แตะเพื่อเปิดใน Google Maps">
+    <canvas id="radar-canvas" width="110" height="110"></canvas>
+  </div>
+
+  <div id="left-zone"><div class="joy-base" id="left-base"><div class="joy-stick" id="left-stick"></div></div></div>
+  <div id="right-zone"><div class="joy-base" id="right-base"><div class="joy-stick" id="right-stick"></div></div></div>
+</div>
+
+<!-- หน้าจอฝั่งตัวรถ (ROVER UI) -->
+<div id="rover-ui">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <strong style="color:#38bdf8;">🤖 โหมดตัวหุ่นยนต์ (ROVER)</strong>
+    <span id="rover-status" style="font-size:12px; color:#fbbf24;">กำลังรอรีโมท...</span>
+  </div>
+  <video id="local-video" autoplay muted playsinline></video>
+
+  <div class="hw-panel">
+    <div style="font-size:13px; font-weight:bold; color:#e2e8f0;">🔌 เชื่อมต่อบอร์ดฮาร์ดแวร์จริง (ESP32 / Arduino)</div>
+    <div class="hw-btns">
+      <button class="hw-btn btn-usb" onclick="connectUSB()">🔗 ต่อสาย USB (Serial)</button>
+      <button class="hw-btn btn-ble" onclick="connectBLE()">📶 ต่อ Bluetooth (BLE)</button>
+    </div>
+    <div id="hw-status" style="font-size:12px; color:#94a3b8; margin-top:6px;">สถานะบอร์ด: ยังไม่ได้เชื่อมต่อ (จำลองการทำงานบนจอ)</div>
+  </div>
+
+  <div id="telemetry-log">รอรับคำสั่งจากรีโมท...</div>
+</div>
+
+<script>
+  // Populate channels CH-01 to CH-99
+  const chSelect = document.getElementById('channel-select');
+  for(let i=1; i<=99; i++) {
+    const ch = 'CH-' + String(i).padStart(2, '0');
+    const opt = document.createElement('option');
+    opt.value = ch; opt.innerText = ch;
+    chSelect.appendChild(opt);
+  }
+
+  let role = 'remote';
+  let peer = null;
+  let conn = null;
+  let currentCall = null;
+  let localStream = null;
+  let facingMode = 'environment';
+  let flashOn = false;
+  let videoQual = '480p';
+  let driveMode = 0; // 0: RC Split, 1: Tank, 2: Free 360
+  const driveModes = ['🚗 โหมด: แยกแกน', '🚜 โหมด: ตีนตะขาบ', '🕹️ โหมด: อิสระ 360°'];
+  
+  let joyL = { x: 0, y: 0 };
+  let joyR = { x: 0, y: 0 };
+  let estopActive = false;
+  let lastHeartbeat = Date.now();
+  let audioCtx = null;
+
+  // GPS & Path
+  let startLat = null, startLng = null;
+  let curLat = null, curLng = null;
+  let pathPoints = [];
+  let pitch = 0, roll = 0, heading = 0;
+
+  // Bandwidth & Recording
+  let totalBytes = 0;
+  let lastBytes = 0;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let isRecording = false;
+  let recSeconds = 0;
+  let recTimer = null;
+
+  // Hardware Serial / BLE
+  let serialWriter = null;
+  let bleCharacteristic = null;
+
+  function selectRole(r) {
+    role = r;
+    document.getElementById('btn-role-remote').classList.toggle('active', r === 'remote');
+    document.getElementById('btn-role-rover').classList.toggle('active', r === 'rover');
+  }
+
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    {
+      urls: 'turn:standard.relay.metered.ca:80',
+      username: 'e8dd65b92f62d3e365b0e3d5',
+      credential: 'uWdWNmkhvyqTEAcO'
+    }
+  ];
+
+  async function startSystem() {
+    const pin = document.getElementById('secret-pin').value.trim() || '0000';
+    const ch = document.getElementById('channel-select').value;
+    const baseId = `fpv-v10-${pin}-${ch}`;
+    const myId = role === 'rover' ? `${baseId}-rover` : `${baseId}-remote`;
+    const targetId = role === 'rover' ? `${baseId}-remote` : `${baseId}-rover`;
+
+    document.getElementById('status-msg').innerText = 'กำลังเปิดระบบและเชื่อมต่อ...';
+
+    // Unlock Audio
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Wake Lock
+    if ('wakeLock' in navigator) {
+      try { await navigator.wakeLock.request('screen'); } catch(e) {}
+    }
+
+    if (role === 'rover') {
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('rover-ui').style.display = 'flex';
+      await initCamera();
+      initRoverSensors();
+    } else {
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('remote-ui').style.display = 'block';
+      initJoysticks();
+      if (screen.orientation && screen.orientation.lock) {
+        try { await screen.orientation.lock('landscape'); } catch(e) {}
+      }
+    }
+
+    initPeer(myId, targetId);
+  }
+
+  function initPeer(myId, targetId) {
+    if (peer) peer.destroy();
+    peer = new Peer(myId, { config: { iceServers } });
+
+    peer.on('open', () => {
+      updateStatus('ออนไลน์ (' + myId.split('-').slice(-2).join('-') + ')');
+      if (role === 'remote') connectToRover(targetId);
+    });
+
+    peer.on('connection', (c) => {
+      conn = c;
+      setupDataConn();
+      if (role === 'rover' && localStream) {
+        setTimeout(() => { peer.call(conn.peer, localStream); }, 500);
+      }
+    });
+
+    peer.on('call', (call) => {
+      currentCall = call;
+      call.answer();
+      call.on('stream', (remoteStream) => {
+        const vid = document.getElementById('remote-video');
+        vid.srcObject = remoteStream;
+      });
+    });
+
+    peer.on('disconnected', () => {
+      updateStatus('สัญญาณหลุด กำลังต่อใหม่...');
+      setTimeout(() => { if (peer && !peer.destroyed) peer.reconnect(); }, 1500);
+    });
+
+    peer.on('error', (err) => {
+      if (role === 'remote') {
+        setTimeout(() => connectToRover(targetId), 2000);
+      }
+    });
+  }
+
+  function connectToRover(targetId) {
+    if (conn && conn.open) return;
+    conn = peer.connect(targetId, { reliable: false });
+    setupDataConn();
+  }
+
+  function setupDataConn() {
+    conn.on('open', () => {
+      updateStatus('เชื่อมต่อสำเร็จ!');
+    });
+    conn.on('data', (data) => {
+      const strSize = JSON.stringify(data).length;
+      totalBytes += strSize;
+
+      if (role === 'rover') {
+        handleRoverCommand(data);
+      } else {
+        handleRemoteTelemetry(data);
+      }
+    });
+    conn.on('close', () => {
+      updateStatus('ขาดการเชื่อมต่อ กำลังค้นหา...');
+      if (role === 'remote') {
+        const pin = document.getElementById('secret-pin').value.trim() || '0000';
+        const ch = document.getElementById('channel-select').value;
+        setTimeout(() => connectToRover(`fpv-v10-${pin}-${ch}-rover`), 1500);
+      }
+    });
+  }
+
+  function updateStatus(msg) {
+    if (role === 'remote') document.getElementById('hud-status').innerText = msg;
+    else document.getElementById('rover-status').innerText = msg;
+  }
+
+  // --- ROVER LOGIC ---
+  async function initCamera() {
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    const res = videoQual === '360p' ? { width: 480, height: 360 } :
+                      videoQual === '720p' ? { width: 1280, height: 720 } : { width: 640, height: 480 };
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facingMode, width: { ideal: res.width }, height: { ideal: res.height }, frameRate: { ideal: 30 } },
+        audio: true
+      });
+      document.getElementById('local-video').srcObject = localStream;
+      if (conn && conn.open) peer.call(conn.peer, localStream);
+    } catch (e) {
+      document.getElementById('rover-status').innerText = 'เปิดกล้องไม่ได้: ' + e.message;
+    }
+  }
+
+  function initRoverSensors() {
+    // GPS
+    if ('geolocation' in navigator) {
+      navigator.geolocation.watchPosition((pos) => {
+        curLat = pos.coords.latitude;
+        curLng = pos.coords.longitude;
+        if (startLat === null) { startLat = curLat; startLng = curLng; }
+        const spd = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(1) : '0.0';
+        window.roverSpeed = spd;
+      }, null, { enableHighAccuracy: true });
+    }
+    // Gyro
+    window.addEventListener('deviceorientation', (e) => {
+      pitch = Math.round(e.beta || 0);
+      roll = Math.round(e.gamma || 0);
+      heading = Math.round(e.alpha || 0);
+    });
+
+    // Telemetry Loop & Fail-Safe
+    setInterval(() => {
+      if (Date.now() - lastHeartbeat > 600) {
+        sendToHardware(0, 0, flashOn, true);
+        document.getElementById('telemetry-log').innerText = '⚠️ FAIL-SAFE: สัญญาณขาด เบรกฉุกเฉินทำงาน!';
+      }
+      if (conn && conn.open) {
+        sendRoverTelemetry();
+      }
+    }, 200);
+  }
+
+  async function sendRoverTelemetry() {
+    let batLevel = '--%';
+    if ('getBattery' in navigator) {
+      try {
+        const b = await navigator.getBattery();
+        batLevel = Math.round(b.level * 100) + '%';
+      } catch(e) {}
+    }
+    const dist = (startLat && curLat) ? Math.round(calcDistance(startLat, startLng, curLat, curLng)) : 0;
+    conn.send({
+      type: 'telemetry',
+      bat: batLevel,
+      pitch, roll, heading,
+      lat: curLat, lng: curLng,
+      speed: window.roverSpeed || '0.0',
+      dist
+    });
+  }
+
+  function handleRoverCommand(data) {
+    lastHeartbeat = Date.now();
+    if (data.type === 'ping') {
+      if (conn && conn.open) conn.send({ type: 'pong', ts: data.ts });
+      return;
+    }
+    if (data.type === 'control') {
+      let mL = 0, mR = 0;
+      if (data.estop) {
+        mL = 0; mR = 0;
+      } else if (data.mode === 0) { // RC Split: joyL.y = throttle, joyR.x = steer
+        mL = Math.max(-100, Math.min(100, Math.round(data.ly + data.rx)));
+        mR = Math.max(-100, Math.min(100, Math.round(data.ly - data.rx)));
+      } else if (data.mode === 1) { // Tank: joyL.y = L, joyR.y = R
+        mL = Math.round(data.ly);
+        mR = Math.round(data.ry);
+      } else { // Free 360: joyL.y = throttle, joyL.x = steer
+        mL = Math.max(-100, Math.min(100, Math.round(data.ly + data.lx)));
+        mR = Math.max(-100, Math.min(100, Math.round(data.ly - data.lx)));
+      }
+      sendToHardware(mL, mR, flashOn, data.estop);
+      document.getElementById('telemetry-log').innerText =
+        `[CMD] Mode:${data.mode} | Motor L:${mL}% R:${mR}% | LED:${flashOn?'ON':'OFF'} | E-STOP:${data.estop}`;
+    } else if (data.type === 'switchCam') {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      initCamera();
+    } else if (data.type === 'toggleFlash') {
+      flashOn = !flashOn;
+      if (localStream) {
+        const track = localStream.getVideoTracks()[0];
+        if (track && track.getCapabilities && track.getCapabilities().torch) {
+          track.applyConstraints({ advanced: [{ torch: flashOn }] }).catch(()=>{});
+        }
+      }
+    } else if (data.type === 'horn') {
+      playHorn();
+    } else if (data.type === 'quality') {
+      videoQual = data.qual;
+      initCamera();
+    }
+  }
+
+  function playHorn() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.35);
+  }
+
+  // Hardware Serial & BLE
+  async function connectUSB() {
+    if (!('serial' in navigator)) return alert('เบราว์เซอร์นี้ไม่รองรับ Web Serial (แนะนำ Chrome บน Android/PC)');
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      serialWriter = port.writable.getWriter();
+      document.getElementById('hw-status').innerText = 'สถานะบอร์ด: ✅ เชื่อมต่อ USB Serial สำเร็จ (115200)';
+      document.getElementById('hw-status').style.color = '#4ade80';
+    } catch (e) {
+      alert('เชื่อมต่อ USB ไม่สำเร็จ: ' + e.message);
+    }
+  }
+
+  async function connectBLE() {
+    if (!('bluetooth' in navigator)) return alert('เบราว์เซอร์นี้ไม่รองรับ Web Bluetooth');
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb', '6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+      });
+      const server = await device.gatt.connect();
+      const services = await server.getPrimaryServices();
+      const chars = await services[0].getCharacteristics();
+      bleCharacteristic = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
+      document.getElementById('hw-status').innerText = 'สถานะบอร์ด: ✅ เชื่อมต่อ Bluetooth (' + device.name + ')';
+      document.getElementById('hw-status').style.color = '#4ade80';
+    } catch (e) {
+      alert('เชื่อมต่อ Bluetooth ไม่สำเร็จ: ' + e.message);
+    }
+  }
+
+  async function sendToHardware(mL, mR, led, estop) {
+    const packet = `M,${mL},${mR},${led?1:0},${estop?1:0}
+`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(packet);
+    if (serialWriter) {
+      try { await serialWriter.write(data); } catch(e) {}
+    }
+    if (bleCharacteristic) {
+      try { await bleCharacteristic.writeValue(data); } catch(e) {}
+    }
+  }
+
+  // --- REMOTE LOGIC ---
+  function sendCmd(obj) {
+    if (conn && conn.open) {
+      const str = JSON.stringify(obj);
+      totalBytes += str.length;
+      conn.send(obj);
+    }
+  }
+
+  function cycleDriveMode() {
+    driveMode = (driveMode + 1) % 3;
+    document.getElementById('btn-mode').innerText = driveModes[driveMode];
+  }
+
+  function cycleQuality() {
+    const quals = ['480p', '360p', '720p'];
+    videoQual = quals[(quals.indexOf(videoQual) + 1) % 3];
+    document.getElementById('btn-qual').innerText = '📺 ' + videoQual;
+    sendCmd({ type: 'quality', qual: videoQual });
+  }
+
+  function triggerEstop() {
+    estopActive = !estopActive;
+    const btn = document.querySelector('.estop');
+    btn.innerText = estopActive ? '✅ ปลดล็อก' : '🛑 E-STOP';
+    btn.style.background = estopActive ? '#15803d' : '#991b1b';
+  }
+
+  function handleRemoteTelemetry(data) {
+    if (data.type === 'pong') {
+      const ping = Date.now() - data.ts;
+      document.getElementById('hud-ping').innerText = ping;
+      return;
+    }
+    if (data.type === 'telemetry') {
+      document.getElementById('hud-bat').innerText = data.bat;
+      document.getElementById('hud-pitch').innerText = data.pitch;
+      document.getElementById('hud-roll').innerText = data.roll;
+      document.getElementById('hud-speed').innerText = data.speed;
+      document.getElementById('hud-dist').innerText = data.dist;
+      if (data.lat && data.lng) {
+        curLat = data.lat; curLng = data.lng;
+        pathPoints.push({ lat: curLat, lng: curLng });
+        if (pathPoints.length > 50) pathPoints.shift();
+      }
+      const line = document.getElementById('horizon-line');
+      line.style.transform = `translateY(${data.pitch}px) rotate(${-data.roll}deg)`;
+      line.style.background = Math.abs(data.roll) > 35 ? '#ef4444' : 'rgba(56, 189, 248, 0.7)';
+      drawRadar(data.heading);
+    }
+  }
+
+  // Control & Ping Loop + Stats Monitor
+  setInterval(() => {
+    if (role !== 'remote') return;
+    if (conn && conn.open) {
+      sendCmd({
+        type: 'control',
+        mode: driveMode,
+        lx: joyL.x, ly: joyL.y,
+        rx: joyR.x, ry: joyR.y,
+        estop: estopActive
+      });
+    }
+  }, 100);
+
+  setInterval(async () => {
+    if (role !== 'remote') return;
+    if (conn && conn.open) sendCmd({ type: 'ping', ts: Date.now() });
+
+    // WebRTC Video Stats
+    if (currentCall && currentCall.peerConnection) {
+      try {
+        const stats = await currentCall.peerConnection.getStats();
+        stats.forEach(report => {
+          if (report.type === 'inbound-rtp' && report.kind === 'video') {
+            if (report.framesPerSecond) document.getElementById('hud-fps').innerText = Math.round(report.framesPerSecond);
+            if (report.bytesReceived) {
+              const vidBytes = report.bytesReceived;
+              const diff = (vidBytes + totalBytes) - lastBytes;
+              if (lastBytes > 0 && diff >= 0) {
+                const kbps = (diff / 1024).toFixed(1);
+                document.getElementById('hud-bw').innerText = kbps + ' KB/s';
+              }
+              lastBytes = vidBytes + totalBytes;
+              document.getElementById('hud-data').innerText = ((vidBytes + totalBytes) / (1024 * 1024)).toFixed(2) + ' MB';
+            }
+          }
+        });
+      } catch(e) {}
+    }
+  }, 1000);
+
+  // --- RECORDING & SNAPSHOT ---
+  function toggleRecord() {
+    const vid = document.getElementById('remote-video');
+    const btn = document.getElementById('btn-rec');
+    const ind = document.getElementById('rec-indicator');
+
+    if (!isRecording) {
+      if (!vid.srcObject) return alert('ยังไม่มีภาพวิดีโอจากตัวรถให้บันทึกครับ');
+      recordedChunks = [];
+      try {
+        mediaRecorder = new MediaRecorder(vid.srcObject, { mimeType: 'video/webm' });
+      } catch (e) {
+        mediaRecorder = new MediaRecorder(vid.srcObject);
+      }
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FPV_Rover_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`;
+        a.click();
+      };
+      mediaRecorder.start(1000);
+      isRecording = true;
+      recSeconds = 0;
+      btn.classList.add('rec-active');
+      btn.innerText = '⏹️ หยุดอัด';
+      ind.style.display = 'inline';
+      recTimer = setInterval(() => {
+        recSeconds++;
+        const m = String(Math.floor(recSeconds / 60)).padStart(2, '0');
+        const s = String(recSeconds % 60).padStart(2, '0');
+        ind.innerText = `● REC ${m}:${s}`;
+      }, 1000);
+    } else {
+      mediaRecorder.stop();
+      isRecording = false;
+      clearInterval(recTimer);
+      btn.classList.remove('rec-active');
+      btn.innerText = '🔴 REC';
+      ind.style.display = 'none';
+    }
+  }
+
+  function takeSnapshot() {
+    const vid = document.getElementById('remote-video');
+    if (!vid.srcObject) return alert('ยังไม่มีภาพวิดีโอครับ');
+    const canvas = document.createElement('canvas');
+    canvas.width = vid.videoWidth || 640;
+    canvas.height = vid.videoHeight || 480;
+    canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `FPV_Snap_${Date.now()}.png`;
+    a.click();
+  }
+
+  // --- FLOATING JOYSTICKS ---
+  function initJoysticks() {
+    setupZone('left-zone', 'left-base', 'left-stick', (nx, ny) => {
+      if (driveMode === 0 || driveMode === 1) nx = 0; // Lock vertical for Throttle / Left Track
+      joyL = { x: nx, y: ny };
+      return { x: nx, y: ny };
+    });
+    setupZone('right-zone', 'right-base', 'right-stick', (nx, ny) => {
+      if (driveMode === 0) ny = 0; // Lock horizontal for Steering
+      if (driveMode === 1) nx = 0; // Lock vertical for Right Track
+      joyR = { x: nx, y: ny };
+      return { x: nx, y: ny };
+    });
+  }
+
+  function setupZone(zoneId, baseId, stickId, onMove) {
+    const zone = document.getElementById(zoneId);
+    const base = document.getElementById(baseId);
+    const stick = document.getElementById(stickId);
+    let touchId = null, startX = 0, startY = 0;
+    const maxR = 45;
+
+    zone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (touchId !== null) return;
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      startX = t.clientX; startY = t.clientY;
+      base.style.left = startX + 'px';
+      base.style.top = startY + 'px';
+      base.style.display = 'block';
+      stick.style.transform = 'translate(-50%, -50%)';
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (let t of e.changedTouches) {
+        if (t.identifier === touchId) {
+          let dx = t.clientX - startX;
+          let dy = t.clientY - startY;
+          const dist = Math.hypot(dx, dy);
+          if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
+          const nx = Math.round((dx / maxR) * 100);
+          const ny = Math.round((-dy / maxR) * 100);
+          const adj = onMove(nx, ny);
+          const visX = (adj.x / 100) * maxR;
+          const visY = (-adj.y / 100) * maxR;
+          stick.style.transform = `translate(calc(-50% + ${visX}px), calc(-50% + ${visY}px))`;
+        }
+      }
+    }, { passive: false });
+
+    const endTouch = (e) => {
+      for (let t of e.changedTouches) {
+        if (t.identifier === touchId) {
+          touchId = null;
+          base.style.display = 'none';
+          onMove(0, 0);
+        }
+      }
+    };
+    zone.addEventListener('touchend', endTouch);
+    zone.addEventListener('touchcancel', endTouch);
+  }
+
+  // Radar & GPS Helpers
+  function drawRadar(hdg) {
+    const c = document.getElementById('radar-canvas');
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 110, 110);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+    ctx.beginPath(); ctx.arc(55, 55, 25, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(55, 55, 50, 0, Math.PI*2); ctx.stroke();
+    
+    // Rover triangle
+    ctx.save();
+    ctx.translate(55, 55);
+    ctx.rotate((hdg || 0) * Math.PI / 180);
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function calcDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+    const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function openGoogleMaps() {
+    if (curLat && curLng) {
+      window.open(`https://www.google.com/maps?q=${curLat},${curLng}`, '_blank');
+    } else {
+      alert('ยังไม่พบพิกัด GPS ของตัวรถครับ');
+    }
+  }
+</script>
+</body>
+</html>
