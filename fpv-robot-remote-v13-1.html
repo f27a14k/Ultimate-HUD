@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FPV Robot Remote v13 - Pro Gaming & Two-Way Audio</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #070b14;
+            --panel-bg: rgba(15, 23, 42, 0.85);
+            --border-glow: rgba(56, 189, 248, 0.35);
+            --accent: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-amber: #f59e0b;
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* ================= LOBBY / SETUP SCREEN ================= */
+        #lobby-screen {
+            max-width: 520px;
+            margin: 20px auto;
+            padding: 24px;
+            background: linear-gradient(145deg, #0f172a, #1e293b);
+            border: 1px solid var(--border-glow);
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+        }
+
+        .header-title {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header-title h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--accent);
+            letter-spacing: 1px;
+        }
+
+        .header-title p {
+            margin: 5px 0 0;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        .role-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .role-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 2px solid #334155;
+            border-radius: 14px;
+            padding: 18px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .role-card.active {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.15);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .role-card .icon { font-size: 2.2rem; display: block; margin-bottom: 6px; }
+        .role-card .title { font-weight: bold; font-size: 1rem; display: block; }
+        .role-card .sub { font-size: 0.75rem; color: var(--text-dim); }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 6px; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: #090d16;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1.05rem;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .btn-launch {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(90deg, #0284c7, #2563eb);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-launch:active { transform: scale(0.98); }
+
+        /* ================= FPV GAMING HUD (REMOTE MODE) ================= */
+        #remote-hud {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #remote-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Crosshair & Artificial Horizon */
+        .fpv-reticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            width: 180px;
+            height: 180px;
+            border: 1px dashed rgba(56, 189, 248, 0.35);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fpv-cross {
+            width: 24px;
+            height: 24px;
+            position: relative;
+        }
+        .fpv-cross::before, .fpv-cross::after {
+            content: '';
+            position: absolute;
+            background: rgba(34, 197, 94, 0.8);
+        }
+        .fpv-cross::before { top: 11px; left: 0; width: 24px; height: 2px; }
+        .fpv-cross::after { left: 11px; top: 0; width: 2px; height: 24px; }
+
+        /* Top Telemetry Bar */
+        .hud-top {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(7, 11, 20, 0.72);
+            backdrop-filter: blur(6px);
+            padding: 8px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border-glow);
+            font-size: 0.8rem;
+            z-index: 20;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .telemetry-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .badge { padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); font-weight: bold; }
+        .badge.online { color: var(--accent-green); border: 1px solid rgba(34,197,94,0.4); }
+        .badge.warn { color: var(--accent-amber); }
+        .badge.rec { background: var(--accent-red); color: #fff; animation: blink 1s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
+
+        /* Action Toolbar */
+        .hud-toolbar {
+            position: absolute;
+            top: 62px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            background: rgba(7, 11, 20, 0.75);
+            padding: 6px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.12);
+            z-index: 20;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 96vw;
+        }
+
+        .tool-btn {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid #475569;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: 0.15s;
+        }
+
+        .tool-btn.active { background: var(--accent); color: #000; font-weight: bold; border-color: #fff; }
+        .tool-btn.ptt-active { background: var(--accent-green); color: #000; font-weight: bold; box-shadow: 0 0 12px var(--accent-green); }
+        .tool-btn.danger { background: rgba(239, 68, 68, 0.85); border-color: #fca5a5; font-weight: bold; }
+
+        /* Dual Virtual Joysticks */
+        .joystick-zone {
+            position: absolute;
+            bottom: 24px;
+            width: 145px;
+            height: 145px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.45);
+            border: 2px solid rgba(56, 189, 248, 0.4);
+            backdrop-filter: blur(3px);
+            z-index: 25;
+            touch-action: none;
+        }
+        #joy-left { left: 24px; }
+        #joy-right { right: 24px; }
+
+        .joy-label {
+            position: absolute;
+            top: -22px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--accent);
+            font-weight: bold;
+            text-shadow: 0 1px 3px #000;
+        }
+
+        .joy-stick {
+            position: absolute;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #38bdf8, #0369a1);
+            border: 2px solid #fff;
+            top: 43px;
+            left: 43px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            pointer-events: none;
+        }
+
+        /* Bottom Telemetry & Audio Meter */
+        .hud-bottom {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(7, 11, 20, 0.78);
+            border: 1px solid var(--border-glow);
+            border-radius: 12px;
+            padding: 8px 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            z-index: 20;
+            min-width: 240px;
+        }
+
+        .audio-bar-wrap {
+            width: 100%;
+            height: 6px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .audio-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+            transition: width 0.08s;
+        }
+
+        .rc-readout {
+            font-family: monospace;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+        }
+
+        /* ================= ROVER HARDWARE BRIDGE SCREEN ================= */
+        #rover-screen {
+            display: none;
+            max-width: 600px;
+            margin: 15px auto;
+            padding: 18px;
+            background: #0f172a;
+            border: 1px solid var(--border-glow);
+            border-radius: 18px;
+        }
+
+        .rover-video-box {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 14px;
+            border: 1px solid #334155;
+        }
+
+        #rover-preview { width: 100%; height: 100%; object-fit: cover; }
+
+        .hw-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .hw-btn {
+            padding: 12px;
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.88rem;
+        }
+
+        .hw-btn.connected { background: rgba(34, 197, 94, 0.2); border-color: var(--accent-green); color: var(--accent-green); }
+
+        .log-console {
+            background: #05080f;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 10px;
+            height: 130px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.78rem;
+            color: #38bdf8;
+        }
+
+        /* ================= ECO STEALTH OVERLAY ================= */
+        #eco-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #000000;
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #334155;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== 1. LOBBY SETUP ==================== -->
+    <div id="lobby-screen">
+        <div class="header-title">
+            <h1>🛰 FPV ROBOT REMOTE v13</h1>
+            <p>Pro Gaming HUD • Two-Way Audio • USB/BLE Bridge</p>
+        </div>
+
+        <div class="role-grid">
+            <div class="role-card active" id="role-remote" onclick="app.selectRole('REMOTE')">
+                <span class="icon">🎮</span>
+                <span class="title">รีโมทบังคับ</span>
+                <span class="sub">(REMOTE CONTROLLER)</span>
+            </div>
+            <div class="role-card" id="role-rover" onclick="app.selectRole('ROVER')">
+                <span class="icon">🤖</span>
+                <span class="title">ตัวหุ่นยนต์</span>
+                <span class="sub">(ROVER UNIT)</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>🔐 รหัสลับส่วนตัว (Secret PIN)</label>
+            <input type="text" id="secret-pin" value="8899" maxlength="8">
+        </div>
+
+        <div class="form-group">
+            <label>📡 ช่องสัญญาณ (Channel 01 - 99)</label>
+            <select id="channel-select"></select>
+        </div>
+
+        <button class="btn-launch" onclick="app.startSystem()">⚡ เปิดเครื่อง & จูนช่องสัญญาณ</button>
+    </div>
+
+    <!-- ==================== 2. REMOTE GAMING HUD ==================== -->
+    <div id="remote-hud">
+        <video id="remote-video" autoplay playsinline></video>
+
+        <div class="fpv-reticle">
+            <div class="fpv-cross"></div>
+        </div>
+
+        <!-- Top Telemetry -->
+        <div class="hud-top">
+            <div class="telemetry-group">
+                <span class="badge online" id="conn-status">⏳ กำลังจูน...</span>
+                <span class="badge" id="net-speed">0 KB/s</span>
+                <span class="badge" id="ping-val">PING: -- ms</span>
+                <span class="badge" id="bat-val">BAT: --%</span>
+            </div>
+            <div class="telemetry-group">
+                <span class="badge" id="gps-val">GPS: รอสัญญาณ</span>
+                <button class="tool-btn" onclick="app.openMaps()">🗺 Maps</button>
+                <button class="tool-btn danger" onclick="location.reload()">ออก</button>
+            </div>
+        </div>
+
+        <!-- Control & Audio Toolbar -->
+        <div class="hud-toolbar">
+            <button class="tool-btn" id="btn-drive-mode" onclick="app.toggleDriveMode()">🚗 แยกแกน RC</button>
+            <button class="tool-btn" onclick="app.sendCommand({type:'CAM_SWITCH'})">🔄 สลับกล้อง</button>
+            <button class="tool-btn" id="btn-flash" onclick="app.toggleFlash()">💡 ไฟแฟลช</button>
+            <button class="tool-btn" onclick="app.triggerHorn()">📢 แตร</button>
+            <button class="tool-btn" id="btn-res" onclick="app.toggleResolution()">📺 480p</button>
+            
+            <!-- NEW AUDIO CONTROLS -->
+            <button class="tool-btn" id="btn-ptt" 
+                onmousedown="app.setMic(true)" onmouseup="app.setMic(false)" 
+                ontouchstart="app.setMic(true)" ontouchend="app.setMic(false)">🎙️ กดพูด (PTT)</button>
+            <button class="tool-btn" id="btn-mic-lock" onclick="app.toggleMicLock()">🎤 ไมค์ค้าง</button>
+            <button class="tool-btn active" id="btn-speaker" onclick="app.toggleSpeaker()">🔊 เสียงหุ่น: เปิด</button>
+
+            <!-- RECORD & SAFETY -->
+            <button class="tool-btn" id="btn-rec" onclick="app.toggleRecord()">🔴 REC (ภาพ+เสียง)</button>
+            <button class="tool-btn" onclick="app.captureSnapshot()">📸 แคป</button>
+            <button class="tool-btn" onclick="app.enableEcoMode()">🔋 จอดำ</button>
+            <button class="tool-btn danger" onclick="app.emergencyStop()">🛑 E-STOP</button>
+        </div>
+
+        <!-- Dual Gaming Joysticks -->
+        <div class="joystick-zone" id="joy-left">
+            <div class="joy-label" id="joy-left-label">THROTTLE / STEER</div>
+            <div class="joy-stick" id="stick-left"></div>
+        </div>
+
+        <div class="joystick-zone" id="joy-right">
+            <div class="joy-label">CAMERA PAN / TILT</div>
+            <div class="joy-stick" id="stick-right"></div>
+        </div>
+
+        <!-- Bottom Telemetry & Mic Meter -->
+        <div class="hud-bottom">
+            <div class="rc-readout" id="rc-telemetry">SPD: 0.0 km/h | P: 0° R: 0° | DIST: 0 m</div>
+            <div class="audio-bar-wrap" title="ระดับเสียงไมโครโฟน">
+                <div class="audio-bar-fill" id="mic-meter"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 3. ROVER HARDWARE BRIDGE ==================== -->
+    <div id="rover-screen">
+        <div class="header-title">
+            <h1>🤖 ROVER HARDWARE BRIDGE</h1>
+            <p id="rover-channel-info">ช่องสัญญาณ: -- | สถานะ: รอรีโมทเชื่อมต่อ</p>
+        </div>
+
+        <div class="rover-video-box">
+            <video id="rover-preview" autoplay muted playsinline></video>
+        </div>
+        <!-- Hidden audio element to play Remote operator's voice -->
+        <audio id="rover-incoming-audio" autoplay></audio>
+
+        <div class="hw-grid">
+            <button class="hw-btn" id="btn-usb" onclick="app.connectUSB()">🔌 ต่อสาย USB (Serial)</button>
+            <button class="hw-btn" id="btn-ble" onclick="app.connectBLE()">📡 ต่อ Bluetooth (BLE)</button>
+            <button class="hw-btn" onclick="app.switchRoverCamera()">🔄 สลับกล้องหน้า/หลัง</button>
+            <button class="hw-btn" onclick="app.enableEcoMode()">🌙 เปิดจอดำประหยัดไฟ</button>
+        </div>
+
+        <div class="log-console" id="rover-log">พร้อมรับคำสั่งฮาร์ดแวร์และเสียง 2 ทาง...<br></div>
+        <button class="btn-launch" style="margin-top:12px; background:#334155;" onclick="location.reload()">ออกจากโหมดหุ่นยนต์</button>
+    </div>
+
+    <!-- ==================== 4. ECO STEALTH MODE ==================== -->
+    <div id="eco-overlay" ondblclick="app.disableEcoMode()">
+        <h2>🔋 ECO STEALTH MODE ACTIVE</h2>
+        <p>ระบบภาพ เสียง และควบคุมยังทำงานเบื้องหลังตามปกติ</p>
+        <p style="color:#64748b; font-size:0.85rem;">(แตะหน้าจอ 2 ครั้งเพื่อปลุกหน้าจอ)</p>
+    </div>
+
+    <script>
+        class FPVRobotV13 {
+            constructor() {
+                this.role = 'REMOTE';
+                this.peer = null;
+                this.conn = null;
+                this.mediaCall = null;
+                this.localStream = null;
+                this.remoteStream = null;
+
+                // Control & State
+                this.driveMode = 'SPLIT'; // SPLIT or SINGLE
+                this.isHD = false;
+                this.flashOn = false;
+                this.micLocked = false;
+                this.speakerOn = true;
+                this.isRecording = false;
+                this.mediaRecorder = null;
+                this.recordedChunks = [];
+                this.facingMode = 'environment';
+
+                // RC Values (-100 to 100)
+                this.rc = { throttle: 0, steer: 0, pan: 0, tilt: 0 };
+                this.roverGPS = null;
+                this.remoteGPS = null;
+
+                // Hardware Serial & BLE
+                this.serialWriter = null;
+                this.bleCharacteristic = null;
+
+                this.initChannelSelect();
+                this.initKeyboardControls();
+                this.initJoysticks();
+            }
+
+            initChannelSelect() {
+                const sel = document.getElementById('channel-select');
+                for (let i = 1; i <= 99; i++) {
+                    const ch = i.toString().padStart(2, '0');
+                    const opt = document.createElement('option');
+                    opt.value = ch;
+                    opt.textContent = `Channel ${ch}`;
+                    sel.appendChild(opt);
+                }
+            }
+
+            selectRole(role) {
+                this.role = role;
+                document.getElementById('role-remote').classList.toggle('active', role === 'REMOTE');
+                document.getElementById('role-rover').classList.toggle('active', role === 'ROVER');
+            }
+
+            log(msg) {
+                const box = document.getElementById('rover-log');
+                if (box) {
+                    const time = new Date().toLocaleTimeString();
+                    box.innerHTML += `[${time}] ${msg}<br>`;
+                    box.scrollTop = box.scrollHeight;
+                }
+            }
+
+            async startSystem() {
+                const pin = document.getElementById('secret-pin').value.trim() || '8899';
+                const ch = document.getElementById('channel-select').value;
+                const baseId = `fpv-robot-v13-${pin}-ch${ch}`;
+
+                document.getElementById('lobby-screen').style.display = 'none';
+
+                if (this.role === 'ROVER') {
+                    document.getElementById('rover-screen').style.display = 'block';
+                    document.getElementById('rover-channel-info').textContent = `ช่องสัญญาณ: CH-${ch} (PIN: ${pin})`;
+                    await this.initRoverMedia();
+                    this.initRoverPeer(`${baseId}-rover`);
+                } else {
+                    document.getElementById('remote-hud').style.display = 'block';
+                    await this.initRemoteAudio();
+                    this.initRemotePeer(`${baseId}-remote`, `${baseId}-rover`);
+                }
+            }
+
+            /* ================= MEDIA & TWO-WAY AUDIO ================= */
+            async initRoverMedia() {
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: this.facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+                    document.getElementById('rover-preview').srcObject = this.localStream;
+                    this.log('เปิดกล้องและไมโครโฟนตัวหุ่นยนต์สำเร็จ');
+                } catch (err) {
+                    this.log('⚠️ ไม่สามารถเข้าถึงกล้อง/ไมค์: ' + err.message);
+                }
+            }
+
+            async initRemoteAudio() {
+                try {
+                    // Remote requests audio-only stream to talk to Rover (Two-Way Intercom)
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+                    // Mute mic by default until PTT or Mic Lock is pressed
+                    this.setMic(false);
+                    this.startAudioVisualizer(this.localStream);
+                } catch (err) {
+                    console.warn('ไมโครโฟนฝั่งรีโมทไม่พร้อมใช้งาน:', err);
+                }
+            }
+
+            startAudioVisualizer(stream) {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+                source.connect(analyser);
+                const data = new Uint8Array(analyser.frequencyBinCount);
+
+                const updateMeter = () => {
+                    analyser.getByteFrequencyData(data);
+                    const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                    const bar = document.getElementById('mic-meter');
+                    if (bar) bar.style.width = Math.min(100, avg * 1.8) + '%';
+                    requestAnimationFrame(updateMeter);
+                };
+                updateMeter();
+            }
+
+            setMic(active) {
+                if (this.micLocked && !active) return;
+                if (this.localStream) {
+                    this.localStream.getAudioTracks().forEach(t => t.enabled = active);
+                }
+                const pttBtn = document.getElementById('btn-ptt');
+                if (pttBtn) pttBtn.classList.toggle('ptt-active', active);
+            }
+
+            toggleMicLock() {
+                this.micLocked = !this.micLocked;
+                this.setMic(this.micLocked);
+                document.getElementById('btn-mic-lock').classList.toggle('active', this.micLocked);
+            }
+
+            toggleSpeaker() {
+                this.speakerOn = !this.speakerOn;
+                const vid = document.getElementById('remote-video');
+                vid.muted = !this.speakerOn;
+                const btn = document.getElementById('btn-speaker');
+                btn.textContent = this.speakerOn ? '🔊 เสียงหุ่น: เปิด' : '🔇 เสียงหุ่น: ปิด';
+                btn.classList.toggle('active', this.speakerOn);
+            }
+
+            /* ================= PEERJS SIGNALING (REMOTE <-> ROVER) ================= */
+            initRoverPeer(roverId) {
+                this.peer = new Peer(roverId);
+                this.peer.on('open', id => this.log(`ออนไลน์แล้ว ID: ${id}`));
+
+                // Receive Data Connection from Remote
+                this.peer.on('connection', connection => {
+                    this.conn = connection;
+                    this.log('🎮 รีโมทเชื่อมต่อเข้ามาแล้ว!');
+                    this.conn.on('data', data => this.handleRoverCommand(data));
+                    this.startRoverTelemetry();
+                });
+
+                // Receive Audio Call from Remote & Answer with Rover Video+Audio
+                this.peer.on('call', call => {
+                    this.log('📞 กำลังส่งภาพและเสียง 2 ทางไปยังรีโมท...');
+                    call.answer(this.localStream);
+                    call.on('stream', remoteAudioStream => {
+                        const audioEl = document.getElementById('rover-incoming-audio');
+                        audioEl.srcObject = remoteAudioStream;
+                    });
+                });
+            }
+
+            initRemotePeer(remoteId, targetRoverId) {
+                this.peer = new Peer(remoteId);
+                this.peer.on('open', () => {
+                    this.connectToRover(targetRoverId);
+                });
+            }
+
+            connectToRover(targetRoverId) {
+                const statusEl = document.getElementById('conn-status');
+                statusEl.textContent = '📡 กำลังเชื่อมต่อไปยังตัวหุ่น...';
+
+                // 1. Data Channel
+                this.conn = this.peer.connect(targetRoverId);
+                this.conn.on('open', () => {
+                    statusEl.textContent = '🟢 เชื่อมต่อสำเร็จ (LIVE)';
+                    this.startControlLoop();
+                });
+
+                this.conn.on('data', data => this.handleTelemetryFromRover(data));
+
+                // 2. Media Call (Send Remote Mic -> Receive Rover Video + Audio)
+                if (this.localStream) {
+                    const call = this.peer.call(targetRoverId, this.localStream);
+                    call.on('stream', stream => {
+                        this.remoteStream = stream;
+                        const vid = document.getElementById('remote-video');
+                        vid.srcObject = stream;
+                        vid.muted = !this.speakerOn;
+                    });
+                }
+            }
+
+            /* ================= GAMING CONTROLS (JOYSTICK + KEYBOARD) ================= */
+            initJoysticks() {
+                this.setupStick('joy-left', 'stick-left', (nx, ny) => {
+                    if (this.driveMode === 'SPLIT') {
+                        this.rc.throttle = Math.round(-ny * 100);
+                        this.rc.steer = Math.round(nx * 100);
+                    } else {
+                        this.rc.throttle = Math.round(-ny * 100);
+                        this.rc.steer = Math.round(nx * 100);
+                    }
+                });
+
+                this.setupStick('joy-right', 'stick-right', (nx, ny) => {
+                    this.rc.pan = Math.round(nx * 100);
+                    this.rc.tilt = Math.round(-ny * 100);
+                });
+            }
+
+            setupStick(zoneId, stickId, onMove) {
+                const zone = document.getElementById(zoneId);
+                const stick = document.getElementById(stickId);
+                let active = false;
+                const maxDist = 45;
+
+                const handleMove = (clientX, clientY) => {
+                    const rect = zone.getBoundingClientRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    let dx = clientX - cx;
+                    let dy = clientY - cy;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > maxDist) {
+                        dx = (dx / dist) * maxDist;
+                        dy = (dy / dist) * maxDist;
+                    }
+                    stick.style.transform = `translate(${dx}px, ${dy}px)`;
+                    onMove(dx / maxDist, dy / maxDist);
+                };
+
+                const resetStick = () => {
+                    active = false;
+                    stick.style.transform = `translate(0px, 0px)`;
+                    onMove(0, 0);
+                };
+
+                zone.addEventListener('touchstart', e => { active = true; handleMove(e.touches[0].clientX, e.touches[0].clientY); });
+                zone.addEventListener('touchmove', e => { if (active) { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); } });
+                zone.addEventListener('touchend', resetStick);
+
+                zone.addEventListener('mousedown', e => { active = true; handleMove(e.clientX, e.clientY); });
+                window.addEventListener('mousemove', e => { if (active) handleMove(e.clientX, e.clientY); });
+                window.addEventListener('mouseup', () => { if (active) resetStick(); });
+            }
+
+            initKeyboardControls() {
+                const keys = {};
+                window.addEventListener('keydown', e => {
+                    if (this.role !== 'REMOTE') return;
+                    keys[e.code] = true;
+                    if (e.code === 'Space') this.setMic(true);
+                    if (e.code === 'KeyH') this.triggerHorn();
+                    this.updateKeyboardRC(keys);
+                });
+                window.addEventListener('keyup', e => {
+                    if (this.role !== 'REMOTE') return;
+                    keys[e.code] = false;
+                    if (e.code === 'Space') this.setMic(false);
+                    this.updateKeyboardRC(keys);
+                });
+            }
+
+            updateKeyboardRC(keys) {
+                let t = 0, s = 0;
+                if (keys['KeyW'] || keys['ArrowUp']) t += 100;
+                if (keys['KeyS'] || keys['ArrowDown']) t -= 100;
+                if (keys['KeyA'] || keys['ArrowLeft']) s -= 100;
+                if (keys['KeyD'] || keys['ArrowRight']) s += 100;
+                this.rc.throttle = t;
+                this.rc.steer = s;
+            }
+
+            startControlLoop() {
+                setInterval(() => {
+                    if (this.conn && this.conn.open) {
+                        this.conn.send({
+                            type: 'RC',
+                            rc: this.rc,
+                            ts: Date.now()
+                        });
+                    }
+                    const speed = (Math.abs(this.rc.throttle) * 0.15).toFixed(1);
+                    document.getElementById('rc-telemetry').textContent = 
+                        `SPD: ${speed} km/h | THR: ${this.rc.throttle}% STR: ${this.rc.steer}% | CAM: ${this.rc.pan},${this.rc.tilt}`;
+                }, 60); // ~16Hz responsive gaming tick
+            }
+
+            sendCommand(cmd) {
+                if (this.conn && this.conn.open) {
+                    this.conn.send(cmd);
+                }
+            }
+
+            /* ================= FEATURES: HORN, FLASH, RECORD, SNAPSHOT ================= */
+            triggerHorn() {
+                this.playSynthHorn(); // Local feedback
+                this.sendCommand({ type: 'HORN' });
+            }
+
+            playSynthHorn() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc1 = ctx.createOscillator();
+                    const osc2 = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc1.type = 'sawtooth';
+                    osc2.type = 'square';
+                    osc1.frequency.value = 380;
+                    osc2.frequency.value = 475;
+                    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+                    osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
+                    osc1.start(); osc2.start();
+                    osc1.stop(ctx.currentTime + 0.45); osc2.stop(ctx.currentTime + 0.45);
+                } catch(e) {}
+            }
+
+            toggleDriveMode() {
+                this.driveMode = this.driveMode === 'SPLIT' ? 'SINGLE' : 'SPLIT';
+                document.getElementById('btn-drive-mode').textContent = 
+                    this.driveMode === 'SPLIT' ? '🚗 แยกแกน RC' : '🕹 จอยเดียว';
+            }
+
+            toggleFlash() {
+                this.flashOn = !this.flashOn;
+                document.getElementById('btn-flash').classList.toggle('active', this.flashOn);
+                this.sendCommand({ type: 'FLASH', state: this.flashOn });
+            }
+
+            toggleResolution() {
+                this.isHD = !this.isHD;
+                document.getElementById('btn-res').textContent = this.isHD ? '📺 720p HD' : '📺 480p';
+                this.sendCommand({ type: 'RES', hd: this.isHD });
+            }
+
+            toggleRecord() {
+                const btn = document.getElementById('btn-rec');
+                if (!this.isRecording) {
+                    if (!this.remoteStream) return alert('ยังไม่มีสัญญาณภาพจากหุ่นยนต์');
+                    this.recordedChunks = [];
+                    // Records BOTH Video and Audio tracks from Rover!
+                    this.mediaRecorder = new MediaRecorder(this.remoteStream, { mimeType: 'video/webm' });
+                    this.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
+                    this.mediaRecorder.onstop = () => {
+                        const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `FPV-Rover-${Date.now()}.webm`;
+                        a.click();
+                    };
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    btn.classList.add('rec');
+                    btn.textContent = '⏹ หยุดอัด';
+                } else {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    btn.classList.remove('rec');
+                    btn.textContent = '🔴 REC (ภาพ+เสียง)';
+                }
+            }
+
+            captureSnapshot() {
+                const vid = document.getElementById('remote-video');
+                const canvas = document.createElement('canvas');
+                canvas.width = vid.videoWidth || 640;
+                canvas.height = vid.videoHeight || 480;
+                canvas.getContext('2d').drawImage(vid, 0, 0);
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/png');
+                a.download = `FPV-Snap-${Date.now()}.png`;
+                a.click();
+            }
+
+            emergencyStop() {
+                this.rc = { throttle: 0, steer: 0, pan: 0, tilt: 0 };
+                this.sendCommand({ type: 'ESTOP' });
+                alert('🛑 ส่งคำสั่งหยุดฉุกเฉิน (E-STOP) ไปยังตัวหุ่นยนต์แล้ว!');
+            }
+
+            openMaps() {
+                if (this.roverGPS) {
+                    window.open(`https://www.google.com/maps?q=${this.roverGPS.lat},${this.roverGPS.lng}`, '_blank');
+                } else {
+                    window.open('https://www.google.com/maps', '_blank');
+                }
+            }
+
+            enableEcoMode() { document.getElementById('eco-overlay').style.display = 'flex'; }
+            disableEcoMode() { document.getElementById('eco-overlay').style.display = 'none'; }
+
+            /* ================= ROVER COMMAND HANDLER & HARDWARE BRIDGE ================= */
+            handleRoverCommand(data) {
+                if (data.type === 'RC') {
+                    const packet = `T:${data.rc.throttle},S:${data.rc.steer},P:${data.rc.pan},L:${data.rc.tilt}\n`;
+                    this.writeToHardware(packet);
+                    if (this.conn && this.conn.open) {
+                        this.conn.send({ type: 'PONG', ts: data.ts });
+                    }
+                } else if (data.type === 'HORN') {
+                    this.log('📢 ได้รับคำสั่ง: บีบแตร!');
+                    this.playSynthHorn();
+                    this.writeToHardware('CMD:HORN\n');
+                } else if (data.type === 'FLASH') {
+                    this.log(`💡 ไฟแฟลช: ${data.state ? 'เปิด' : 'ปิด'}`);
+                    const track = this.localStream?.getVideoTracks()[0];
+                    if (track && track.getCapabilities().torch) {
+                        track.applyConstraints({ advanced: [{ torch: data.state }] });
+                    }
+                    this.writeToHardware(`CMD:FLASH_${data.state ? 1 : 0}\n`);
+                } else if (data.type === 'CAM_SWITCH') {
+                    this.switchRoverCamera();
+                } else if (data.type === 'ESTOP') {
+                    this.log('🛑 EMERGENCY STOP TRIGGERED!');
+                    this.writeToHardware('T:0,S:0,ESTOP:1\n');
+                }
+            }
+
+            handleTelemetryFromRover(data) {
+                if (data.type === 'PONG') {
+                    const ping = Date.now() - data.ts;
+                    document.getElementById('ping-val').textContent = `PING: ${ping} ms`;
+                } else if (data.type === 'TELEMETRY') {
+                    document.getElementById('bat-val').textContent = `BAT: ${data.bat}%`;
+                    if (data.gps) {
+                        this.roverGPS = data.gps;
+                        document.getElementById('gps-val').textContent = `GPS: ${data.gps.lat.toFixed(4)}, ${data.gps.lng.toFixed(4)}`;
+                    }
+                }
+            }
+
+            async startRoverTelemetry() {
+                let batLevel = 100;
+                if (navigator.getBattery) {
+                    const b = await navigator.getBattery();
+                    batLevel = Math.round(b.level * 100);
+                }
+                if (navigator.geolocation) {
+                    navigator.geolocation.watchPosition(pos => {
+                        this.roverGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    });
+                }
+                setInterval(() => {
+                    if (this.conn && this.conn.open) {
+                        this.conn.send({ type: 'TELEMETRY', bat: batLevel, gps: this.roverGPS });
+                    }
+                }, 2000);
+            }
+
+            async switchRoverCamera() {
+                this.facingMode = this.facingMode === 'environment' ? 'user' : 'environment';
+                if (this.localStream) {
+                    this.localStream.getVideoTracks().forEach(t => t.stop());
+                }
+                await this.initRoverMedia();
+                this.log(`🔄 สลับกล้องเป็น: ${this.facingMode}`);
+            }
+
+            async connectUSB() {
+                try {
+                    const port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 115200 });
+                    this.serialWriter = port.writable.getWriter();
+                    document.getElementById('btn-usb').classList.add('connected');
+                    this.log('🔌 เชื่อมต่อ USB Serial (115200 baud) สำเร็จ!');
+                } catch (err) {
+                    this.log('❌ USB Error: ' + err.message);
+                }
+            }
+
+            async connectBLE() {
+                try {
+                    const device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+                    });
+                    const server = await device.gatt.connect();
+                    const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+                    this.bleCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+                    document.getElementById('btn-ble').classList.add('connected');
+                    this.log(`📡 เชื่อมต่อ BLE (${device.name}) สำเร็จ!`);
+                } catch (err) {
+                    this.log('❌ BLE Error: ' + err.message);
+                }
+            }
+
+            async writeToHardware(text) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(text);
+                if (this.serialWriter) {
+                    try { await this.serialWriter.write(data); } catch (e) {}
+                }
+                if (this.bleCharacteristic) {
+                    try { await this.bleCharacteristic.writeValue(data); } catch (e) {}
+                }
+            }
+        }
+
+        const app = new FPVRobotV13();
+    </script>
+</body>
+</html>
